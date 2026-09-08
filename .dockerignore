@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/.vs/
+**/.idea/
+**/.git/
+**/TestResults/
+**/*.user
+.env
+.env.*
+!.env.example
+deploy/compose/.env

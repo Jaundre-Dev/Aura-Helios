@@ -1,0 +1,55 @@
+## .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+*.userprefs
+.vs/
+.vscode/
+*.dll
+*.pdb
+project.lock.json
+project.fragment.lock.json
+TestResults/
+coverage/
+*.trx
+BenchmarkDotNet.Artifacts/
+
+## Rider / JetBrains
+.idea/
+
+## Node / frontend
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+## Environment & secrets
+.env
+.env.*
+!.env.example
+appsettings.Development.json
+appsettings.Local.json
+secrets.json
+*.pfx
+*.key
+
+## Data volumes / runtime
+data/
+logs/
+tmp/
+.ollama/
+.models/
+
+## OS
+.DS_Store
+Thumbs.db
+desktop.ini

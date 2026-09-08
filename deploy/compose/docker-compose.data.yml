@@ -1,0 +1,62 @@
+name: helios-data
+
+# Development stack for the hybrid setup: MySQL and Redis in containers, everything
+# else on the host. Ollama runs natively on Windows so it reaches the GPU directly
+# without WSL2 passthrough, and the API, Worker and web client run from Visual Studio
+# and Vite so you keep the debugger.
+#
+#   docker compose -f docker-compose.data.yml up -d
+#
+# Memory limits are set deliberately: on a 16 GB machine these two services must not
+# be allowed to grow into the headroom a loaded model needs.
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: helios-mysql
+    command: >
+      --default-authentication-plugin=caching_sha2_password
+      --innodb-buffer-pool-size=256M
+      --performance-schema=OFF
+    # This machine already runs a native MySQL80 service on 3306. Set MYSQL_HOST_PORT=3307
+    # in .env to run both side by side, or stop the native service to use 3306 here.
+    ports:
+      - "${MYSQL_HOST_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+
+  redis:
+    image: redis:7-alpine
+    container_name: helios-redis
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+
+volumes:
+  mysql-data:
+  redis-data:

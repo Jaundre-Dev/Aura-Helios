@@ -1,0 +1,77 @@
+<Project>
+
+  <!--
+    Central Package Management. Versions live here and nowhere else — a csproj carries
+    <PackageReference Include="..." /> with no Version attribute.
+
+    READ THIS BEFORE ADDING AN EF PACKAGE
+    =====================================
+    The EF stack is pinned to 9.0.x and MUST STAY THERE.
+
+    Pomelo.EntityFrameworkCore.MySql 9.0.0 declares a hard dependency range of
+    Microsoft.EntityFrameworkCore.Relational [9.0.0, 9.0.999]. There is no Pomelo build
+    for EF Core 10 or 11. Bumping any EF package to 10.x will either fail to restore or,
+    worse, restore and then fail at runtime with a provider mismatch.
+
+    EF Core 9 targets net8.0 and runs correctly on net10.0 — this split is supported and
+    intentional, not a workaround waiting to be tidied up.
+
+    See docs/adr/0003-ef-core-9-pin.md. Revisit when Pomelo ships an EF Core 10 provider.
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <!-- ================= EF Core stack — PINNED to 9.0.x, see note above ================= -->
+  <ItemGroup>
+    <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.19" />
+    <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="9.0.19" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="9.0.19" />
+  </ItemGroup>
+
+  <!-- ================= ASP.NET Core 10 host ================= -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
+  </ItemGroup>
+
+  <!-- ================= Infrastructure ================= -->
+  <ItemGroup>
+    <PackageVersion Include="StackExchange.Redis" Version="3.1.31" />
+    <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+  </ItemGroup>
+
+  <!-- ================= Application ================= -->
+  <ItemGroup>
+    <PackageVersion Include="FluentValidation" Version="12.1.1" />
+    <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+  </ItemGroup>
+
+  <!-- ================= Testing ================= -->
+  <!--
+    No FluentAssertions. Version 8 moved to a paid commercial licence (Xceed); v7 is the
+    last free release and is not receiving updates. xunit's own assertions cover what this
+    codebase needs. If a fluent syntax becomes worth it, use Shouldly (Apache 2.0).
+  -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="NSubstitute" Version="6.2.0" />
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
+    <PackageVersion Include="Testcontainers.MySql" Version="4.14.0" />
+    <PackageVersion Include="Testcontainers.Redis" Version="4.14.0" />
+  </ItemGroup>
+
+</Project>

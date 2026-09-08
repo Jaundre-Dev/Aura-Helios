@@ -1,0 +1,31 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.{cs,csx}]
+indent_size = 4
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_using_directive_placement = outside_namespace:suggestion
+dotnet_sort_system_directives_first = true
+csharp_style_var_when_type_is_apparent = true:suggestion
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
+
+[*.{ts,tsx,js,jsx,json,yml,yaml,css,scss,html}]
+indent_size = 2
+
+[*.{csproj,props,targets,xml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+# EF Core emits block-scoped namespaces in generated migrations and we do not control
+# its templates. Treat them as generated rather than hand-editing every new migration.
+[**/Persistence/MySql/Migrations/*.cs]
+generated_code = true
+dotnet_diagnostic.IDE0161.severity = none

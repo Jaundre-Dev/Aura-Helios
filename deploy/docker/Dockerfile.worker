@@ -1,0 +1,18 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY Directory.Build.props global.json ./
+COPY src/Helios.Contracts/Helios.Contracts.csproj      src/Helios.Contracts/
+COPY src/Helios.Domain/Helios.Domain.csproj            src/Helios.Domain/
+COPY src/Helios.Application/Helios.Application.csproj  src/Helios.Application/
+COPY src/Helios.Infrastructure/Helios.Infrastructure.csproj src/Helios.Infrastructure/
+COPY src/Helios.Worker/Helios.Worker.csproj            src/Helios.Worker/
+RUN dotnet restore src/Helios.Worker/Helios.Worker.csproj
+
+COPY src/ src/
+RUN dotnet publish src/Helios.Worker/Helios.Worker.csproj -c Release -o /app --no-restore
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0 AS runtime
+WORKDIR /app
+COPY --from=build /app .
+ENTRYPOINT ["dotnet", "Helios.Worker.dll"]

@@ -1,0 +1,15 @@
+# HELIOS — WSL2 configuration for a 16 GB machine.
+#
+# Copy to %USERPROFILE%\.wslconfig BEFORE installing Docker Desktop, then run:
+#     wsl --shutdown
+#
+# Without this cap WSL2 takes up to half of system RAM (8 GB of 16), and the VM will
+# contend with a loaded Ollama model for the same memory. Both suffer.
+
+[wsl2]
+memory=6GB
+processors=4
+swap=2GB
+
+# Reclaim freed memory back to Windows instead of holding it.
+autoMemoryReclaim=gradual
