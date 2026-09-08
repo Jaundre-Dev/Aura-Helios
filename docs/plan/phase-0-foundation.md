@@ -60,22 +60,41 @@ Files: `Infrastructure/Configuration/`, `Api/Configuration/`.
   release via a Lua compare-and-delete so a lapsed owner cannot release someone else's lock
 - `RedisRateLimiter`, `RedisHealthCache`
 
-## WP0.4 — Identity, workspace isolation, RBAC · *partial*
+## WP0.4 — Identity, workspace isolation, RBAC · **done**
 
 > **Decision — local ASP.NET Core Identity for v1**, with a claims shape an OIDC provider
 > can later fill unchanged. HELIOS is local-first: a developer must be able to run it with
 > no network.
 
-Done: `IWorkspaceContext`, `HttpWorkspaceContext` reading claims, `SystemWorkspaceContext`
-for the worker and migrations, global query filters, `WorkspaceRole` with Owner through
-Viewer, and role checks in every service.
+Isolation, done earlier: `IWorkspaceContext`, `HttpWorkspaceContext` reading claims,
+`SystemWorkspaceContext` for the worker and migrations, global query filters, `WorkspaceRole`
+with Owner through Viewer, and role checks in every service.
 
-Still to do: the sign-in endpoints, JWT issuance and validation, and authorization policies.
+Sign-in, this work package:
 
-- Claims: `sub`, `workspace_id`, `role`
-- **SignalR gotcha:** a browser cannot set an `Authorization` header on a websocket. Accept
-  the token from the query string in `JwtBearerEvents.OnMessageReceived`, but only for
-  paths under `/hubs`.
+```
+POST /api/v1/auth/register          POST /api/v1/auth/login
+POST /api/v1/auth/select-workspace  GET  /api/v1/auth/me
+```
+
+- Tokens are issued by `JwtTokenIssuer` and validated by JWT bearer. `JwtOptions` binds
+  from `Helios:Jwt` and `ValidateOnStart()`s; the signing key lives in user-secrets, never
+  in `appsettings.json`, exactly like the connection string (this establishes the WP0.1
+  options pattern the rest will follow).
+- Claims: `sub`, `workspace_id`, `role`, read with `MapInboundClaims = false` so they
+  arrive verbatim. A user signs in first, then `select-workspace` re-issues a token scoped
+  to a workspace they belong to — **404, not 403**, for one they do not, matching the
+  workspace GET so neither leaks other tenants.
+- **SignalR gotcha (handled):** a browser cannot set an `Authorization` header on a
+  websocket, so the hubs accept the token from the `access_token` query string in
+  `JwtBearerEvents.OnMessageReceived`, but only for paths under `/hubs`.
+- Registration is open in v1 (local-first). Gating it behind an invite or an org admin is a
+  later hardening, not a Phase 0 concern.
+
+> **Decision — endpoint gate is authentication; RBAC stays in the services.** The REST
+> groups only `RequireAuthorization()`. The per-workspace role checks live in the services,
+> where they can return 404 for a non-member instead of the 403 an endpoint policy would —
+> a role policy at the door would leak the existence of other tenants' workspaces.
 
 ## WP0.5 — Workspace and project endpoints · **done**
 
@@ -146,7 +165,7 @@ instead of rebuilding it.
 | # | Check | State |
 | --- | --- | --- |
 | 1 | `docker compose up` brings up API, worker, web, MySQL, Redis and Ollama | blocked — Docker |
-| 2 | A user signs in, creates a workspace, creates a project | partial — create works, sign-in is WP0.4 |
+| 2 | A user signs in, creates a workspace, creates a project | **done** — verified end to end via the API |
 | 3 | The new project appears in a second browser tab with no refresh | blocked — WP0.6 |
 | 4 | `AuditLogs` has a row for every write, with actor and workspace | **done** — covered by test |
 | 5 | `/health/ready` reports unhealthy when MySQL is stopped | **done** |
@@ -156,8 +175,8 @@ instead of rebuilding it.
 ## Risks
 
 Pomelo JSON mapping needs a value comparer or change tracking silently misses list
-mutations. SignalR authentication on the websocket handshake is the other classic time
-sink — do it in WP0.4, not later.
+mutations. SignalR authentication on the websocket handshake — the other classic time sink —
+is handled in WP0.4: the token comes off the `access_token` query string for `/hubs` paths.
 
 **Learned the hard way:** the first integration-test fixture overrode the connection string
 through configuration, was silently outranked by the API's own user-secrets, and dropped

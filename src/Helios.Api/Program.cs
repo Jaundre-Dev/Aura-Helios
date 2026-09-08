@@ -2,6 +2,7 @@ using Helios.Api.Configuration;
 using Helios.Api.Endpoints;
 using Helios.Api.Middleware;
 using Helios.Api.Hubs;
+using Helios.Api.Security;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.DependencyInjection;
 using Helios.Contracts.Realtime;
@@ -20,6 +21,7 @@ builder.Services.AddScoped<IWorkspaceContext, HttpWorkspaceContext>();
 
 builder.Services.AddHeliosPersistence(builder.Configuration);
 builder.Services.AddHeliosIdentity();
+builder.Services.AddHeliosAuthentication(builder.Configuration);
 builder.Services.AddHeliosApplication();
 
 builder.Services.AddCors(options =>
@@ -31,8 +33,6 @@ builder.Services.AddCors(options =>
         .AllowCredentials());
 });
 
-// TODO WP0.4: JWT bearer, authorization policies, and the workspace claim.
-
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -42,6 +42,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 app.UseCors("helios-web");
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 // Liveness: the process is up. Deliberately touches nothing else, so a database outage
 // never causes the orchestrator to kill an otherwise healthy container.
@@ -59,13 +62,16 @@ app.MapGet("/health/ready", async (HeliosDbContext db, CancellationToken ct) =>
 })
 .WithName("Readiness");
 
-app.MapHub<WorkspaceHub>(HubRoutes.Workspace);
-app.MapHub<AgentHub>(HubRoutes.Agent);
-app.MapHub<ProjectHub>(HubRoutes.Project);
-app.MapHub<NotificationHub>(HubRoutes.Notification);
-app.MapHub<WorkflowHub>(HubRoutes.Workflow);
-app.MapHub<MonitoringHub>(HubRoutes.Monitoring);
+// Hubs require a valid token. A browser sends it in the query string on the websocket
+// handshake, which JwtBearerEvents.OnMessageReceived accepts for /hubs paths only.
+app.MapHub<WorkspaceHub>(HubRoutes.Workspace).RequireAuthorization();
+app.MapHub<AgentHub>(HubRoutes.Agent).RequireAuthorization();
+app.MapHub<ProjectHub>(HubRoutes.Project).RequireAuthorization();
+app.MapHub<NotificationHub>(HubRoutes.Notification).RequireAuthorization();
+app.MapHub<WorkflowHub>(HubRoutes.Workflow).RequireAuthorization();
+app.MapHub<MonitoringHub>(HubRoutes.Monitoring).RequireAuthorization();
 
+app.MapAuthEndpoints();
 app.MapOrganizationEndpoints();
 app.MapWorkspaceEndpoints();
 app.MapProjectEndpoints();

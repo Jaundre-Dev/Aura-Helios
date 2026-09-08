@@ -24,15 +24,15 @@ less certain the estimate.
 
 ## Where we are
 
-Phase 0 is **in progress**. Build is green, 35 tests pass, and the API serves real data
-from a real database.
+Phase 0 is **in progress**. Build is green, 46 tests pass, and a signed-in user can create
+a workspace and a project through the API against a real database.
 
 | Work package | State |
 | --- | --- |
-| WP0.1 Configuration and options | partial — options binding still to formalise |
+| WP0.1 Configuration and options | partial — `JwtOptions` sets the validate-on-start pattern; other options still to bind |
 | **WP0.2 Persistence (MySQL)** | **done** |
 | WP0.3 Redis infrastructure | not started — blocked on Docker |
-| WP0.4 Identity, isolation, RBAC | partial — isolation and roles done, sign-in not |
+| **WP0.4 Identity, isolation, RBAC** | **done** — sign-in, JWT, workspace selection |
 | **WP0.5 Workspace and project endpoints** | **done** |
 | WP0.6 Events to Redis to SignalR | not started — blocked on Docker |
 | WP0.7 Observability baseline | partial — health endpoints done, Serilog not wired |
@@ -57,8 +57,8 @@ from a real database.
 
 ### What is deliberately absent
 
-No Redis, no provider implementation, no agent runtime, no sign-in, no real UI screens.
-Each is scheduled at the phase that needs it.
+No Redis, no provider implementation, no agent runtime, no real UI screens. Each is
+scheduled at the phase that needs it. (Sign-in now exists — WP0.4.)
 
 ## The critical path
 

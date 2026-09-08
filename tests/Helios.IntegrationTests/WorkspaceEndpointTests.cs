@@ -16,8 +16,8 @@ namespace Helios.IntegrationTests;
 /// Exercises the real endpoints against a real MySQL schema — WP0.5, and Gate 0 check 4
 /// (every write leaves an audit row).
 /// </summary>
+[Collection(HeliosApiCollection.Name)]
 public sealed class WorkspaceEndpointTests(HeliosApiFactory factory)
-    : IClassFixture<HeliosApiFactory>
 {
     private readonly HeliosApiFactory _factory = factory;
 
@@ -239,6 +239,23 @@ public sealed class WorkspaceEndpointTests(HeliosApiFactory factory)
         Assert.NotNull(reclassification);
         Assert.Contains("Restricted", reclassification.Metadata);
         Assert.Contains("Internal", reclassification.Metadata);
+    }
+
+    [Fact]
+    public async Task A_malformed_body_returns_400_not_500()
+    {
+        var client = SignedInAs(Guid.CreateVersion7());
+
+        // classification is an enum; sending it as arbitrary text fails JSON binding. The
+        // caller's mistake must surface as a 400, never as a server-fault 500.
+        var body = new StringContent(
+            """{"name":"Broken","classification":"not-a-classification"}""",
+            System.Text.Encoding.UTF8,
+            "application/json");
+
+        var response = await client.PostAsync("/api/v1/projects", body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     private sealed record ValidationProblemShape(

@@ -24,6 +24,9 @@ public sealed class HeliosExceptionHandler(
             ConflictException => (StatusCodes.Status409Conflict, "Conflict"),
             ForbiddenException => (StatusCodes.Status403Forbidden, "Forbidden"),
             UnauthenticatedException => (StatusCodes.Status401Unauthorized, "Not authenticated"),
+            // A malformed body (bad JSON, an enum sent as the wrong type) is the caller's
+            // mistake, not a server fault — return the 400 it carries, not a 500.
+            BadHttpRequestException badRequest => (badRequest.StatusCode, "Bad request"),
             _ => (0, string.Empty)
         };
 

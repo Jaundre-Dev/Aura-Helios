@@ -9,7 +9,8 @@ public static class OrganizationEndpoints
     public static IEndpointRouteBuilder MapOrganizationEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/organizations")
-            .WithTags("Organizations");
+            .WithTags("Organizations")
+            .RequireAuthorization();
 
         group.MapGet("/", async (OrganizationService service, CancellationToken ct) =>
                 Results.Ok(await service.ListAsync(ct)))

@@ -9,7 +9,8 @@ public static class WorkspaceEndpoints
     public static IEndpointRouteBuilder MapWorkspaceEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/workspaces")
-            .WithTags("Workspaces");
+            .WithTags("Workspaces")
+            .RequireAuthorization();
 
         group.MapGet("/", async (WorkspaceService service, CancellationToken ct) =>
                 Results.Ok(await service.ListMineAsync(ct)))

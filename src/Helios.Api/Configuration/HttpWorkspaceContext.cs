@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Helios.Api.Security;
 using Helios.Application.Abstractions.Security;
 
 namespace Helios.Api.Configuration;
@@ -19,11 +20,9 @@ namespace Helios.Api.Configuration;
 /// </remarks>
 public sealed class HttpWorkspaceContext(IHttpContextAccessor accessor) : IWorkspaceContext
 {
-    public const string WorkspaceClaim = "workspace_id";
+    public Guid? UserId => ReadGuid(HeliosClaims.Subject);
 
-    public Guid? UserId => ReadGuid(ClaimTypes.NameIdentifier);
-
-    public Guid? WorkspaceId => ReadGuid(WorkspaceClaim);
+    public Guid? WorkspaceId => ReadGuid(HeliosClaims.Workspace);
 
     public bool IsSystem => false;
 

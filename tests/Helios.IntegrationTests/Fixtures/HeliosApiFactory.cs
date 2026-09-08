@@ -1,6 +1,10 @@
+using System.Security.Claims;
+using System.Text.Encodings.Web;
+using Helios.Api.Security;
 using Helios.Application.Abstractions.Security;
 using Helios.Infrastructure.Persistence.MySql;
 using Helios.Infrastructure.Persistence.MySql.Interceptors;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -8,9 +12,49 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MySqlConnector;
 
 namespace Helios.IntegrationTests.Fixtures;
+
+/// <summary>
+/// Authenticates every request from the <see cref="TestWorkspaceContext"/> the test set on
+/// the fixture, so <c>RequireAuthorization</c> is satisfied without minting a real JWT per
+/// call. The real JWT pipeline is covered separately by <c>AuthEndpointTests</c> and the
+/// token-issuer unit tests; these endpoint tests are about isolation and RBAC, not signing.
+/// </summary>
+public sealed class TestAuthHandler(
+    IWorkspaceContext workspaceContext,
+    IOptionsMonitor<AuthenticationSchemeOptions> options,
+    ILoggerFactory logger,
+    UrlEncoder encoder)
+    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+{
+    public const string SchemeName = "Test";
+
+    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    {
+        // No user set on the context means an anonymous client — let the challenge return
+        // 401, which is what an unauthenticated caller should see.
+        if (workspaceContext.UserId is not { } userId)
+        {
+            return Task.FromResult(AuthenticateResult.NoResult());
+        }
+
+        var claims = new List<Claim> { new(HeliosClaims.Subject, userId.ToString()) };
+
+        if (workspaceContext.WorkspaceId is { } workspaceId)
+        {
+            claims.Add(new Claim(HeliosClaims.Workspace, workspaceId.ToString()));
+        }
+
+        var identity = new ClaimsIdentity(claims, SchemeName, HeliosClaims.Subject, HeliosClaims.Role);
+        var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);
+
+        return Task.FromResult(AuthenticateResult.Success(ticket));
+    }
+}
 
 /// <summary>
 /// Identity for a test run. Replaces <see cref="IWorkspaceContext"/> in the container so
@@ -75,10 +119,27 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
     {
         builder.UseEnvironment(Environments.Development);
 
+        // Give JwtOptions.ValidateOnStart a valid key so the host boots without depending on
+        // the developer's user-secrets. These tests do not validate real tokens.
+        builder.ConfigureAppConfiguration(config =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Helios:Jwt:SigningKey"] = "integration-tests-signing-key-not-a-real-secret",
+                ["Helios:Jwt:Issuer"] = "helios-test",
+                ["Helios:Jwt:Audience"] = "helios-test",
+            });
+        });
+
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IWorkspaceContext>();
             services.AddSingleton<IWorkspaceContext>(Context);
+
+            // Make the test scheme the default so RequireAuthorization uses it. The real
+            // JwtBearer scheme stays registered but is no longer the default.
+            services.AddAuthentication(TestAuthHandler.SchemeName)
+                .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
 
             // Re-register the context outright instead of overriding configuration.
             // Configuration precedence between the host's own sources and a test
