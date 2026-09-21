@@ -49,6 +49,12 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddScoped<IHeliosDbContext>(sp => sp.GetRequiredService<HeliosDbContext>());
         services.AddScoped<IAuditWriter, AuditWriter>();
 
+        // Built from the fully-merged configuration on first resolution, so a missing or malformed
+        // key fails before any secret is written — never with a corrupted value — rather than being
+        // read from a half-built configuration at registration time.
+        services.AddSingleton(sp => SecretKeyring.FromConfiguration(sp.GetRequiredService<IConfiguration>()));
+        services.AddScoped<ISecretStore, MySqlSecretStore>();
+
         return services;
     }
 

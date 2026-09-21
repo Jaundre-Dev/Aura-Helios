@@ -27,6 +27,7 @@ public class HeliosDbContext(
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<Secret> Secrets => Set<Secret>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -78,5 +79,10 @@ public class HeliosDbContext(
         // System-scoped audit rows carry no workspace and stay invisible to workspace users.
         modelBuilder.Entity<AuditLog>()
             .HasQueryFilter(a => _workspaceContext.IsSystem || a.WorkspaceId == _workspaceContext.WorkspaceId);
+
+        // A secret is reachable only from its own workspace. The store also refuses a system caller,
+        // so this filter is the second lock rather than the only one.
+        modelBuilder.Entity<Secret>()
+            .HasQueryFilter(s => _workspaceContext.IsSystem || s.WorkspaceId == _workspaceContext.WorkspaceId);
     }
 }

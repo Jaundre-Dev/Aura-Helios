@@ -128,6 +128,10 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
                 ["Helios:Jwt:SigningKey"] = "integration-tests-signing-key-not-a-real-secret",
                 ["Helios:Jwt:Issuer"] = "helios-test",
                 ["Helios:Jwt:Audience"] = "helios-test",
+
+                // A fixed 32-byte AES key so the secret store boots under test. Not a real secret.
+                ["Helios:Secrets:ActiveKeyId"] = "test",
+                ["Helios:Secrets:Keys:test"] = Convert.ToBase64String(new byte[32]),
             });
         });
 
