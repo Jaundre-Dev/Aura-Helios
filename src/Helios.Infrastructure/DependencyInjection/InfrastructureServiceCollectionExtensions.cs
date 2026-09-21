@@ -1,6 +1,8 @@
 using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Abstractions.Security;
+using Helios.Application.Abstractions.Storage;
 using Helios.Infrastructure.Security;
+using Helios.Infrastructure.Storage;
 using Helios.Infrastructure.Persistence.MySql;
 using Helios.Infrastructure.Persistence.MySql.Identity;
 using Helios.Infrastructure.Persistence.MySql.Interceptors;
@@ -54,6 +56,9 @@ public static class InfrastructureServiceCollectionExtensions
         // read from a half-built configuration at registration time.
         services.AddSingleton(sp => SecretKeyring.FromConfiguration(sp.GetRequiredService<IConfiguration>()));
         services.AddScoped<ISecretStore, MySqlSecretStore>();
+
+        // Tenant-scoped object storage for run outputs and uploads (WP0.7).
+        services.AddScoped<IObjectStore, MySqlObjectStore>();
 
         return services;
     }

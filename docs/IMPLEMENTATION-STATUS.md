@@ -10,7 +10,7 @@ Living status for Helios delivery. The authoritative plan is
 The scaffold + earlier work-packages build and test green on .NET 10:
 
 - **Build:** `dotnet build Helios.sln` — 0 warnings / 0 errors.
-- **Tests:** 55 pass, 0 failed, 0 skipped — Unit 22, Architecture 4, Integration 29.
+- **Tests:** 63 pass, 0 failed, 0 skipped — Unit 22, Architecture 4, Integration 37.
   Integration tests run against a real MySQL (`helios_test`), applying the real EF migrations.
 - Architecture tests enforce the dependency direction (Api → Application → Domain; Infrastructure
   implements Application abstractions).
@@ -44,9 +44,18 @@ lifecycle, capability registry, audit, metering and authorization tests.*
   independence, encryption-at-rest, audit-without-value, the system-caller refusal, and GCM
   tamper-detection.
 
+- **Scoped object storage (WP0.7, 2026-09-21 — this slice):** a tenant-scoped `IObjectStore` for run
+  outputs and uploads (the bytes behind an `Artifact.StorageRef`). Objects belong to a workspace and
+  are reachable only through the current workspace and the same global query filter, so an opaque
+  reference minted in one tenant resolves to nothing in another, and a system caller with no
+  workspace is refused. Content is bounded (16 MB) and held in the row behind the abstraction, so the
+  backend can become a filesystem or object store later without the reference or callers changing.
+  Eight integration tests: round-trip with metadata, unknown/malformed reference, cross-tenant
+  isolation (of both read and delete), delete + idempotent re-delete, empty and over-limit rejection,
+  system-caller refusal, and put/delete audit rows.
+
 ### Remaining for H0
 
-- **Scoped storage** — a tenant-scoped object/blob store for artifacts (interfaces are stubbed).
 - **Queue / worker lifecycle** — a real `IJobQueue` with bounded retries, leases, cancellation and
   dead-letter handling; the worker currently has only the agent-run skeleton.
 - **Capability registry + runs API** — the `POST /api/v1/capabilities/{capability}/runs` contract

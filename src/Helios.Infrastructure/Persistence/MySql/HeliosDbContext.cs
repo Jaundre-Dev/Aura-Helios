@@ -28,6 +28,7 @@ public class HeliosDbContext(
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Secret> Secrets => Set<Secret>();
+    public DbSet<StoredObject> StoredObjects => Set<StoredObject>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -84,5 +85,10 @@ public class HeliosDbContext(
         // so this filter is the second lock rather than the only one.
         modelBuilder.Entity<Secret>()
             .HasQueryFilter(s => _workspaceContext.IsSystem || s.WorkspaceId == _workspaceContext.WorkspaceId);
+
+        // A stored object is reachable only from its own workspace, so a reference minted in one
+        // tenant resolves to nothing in another.
+        modelBuilder.Entity<StoredObject>()
+            .HasQueryFilter(o => _workspaceContext.IsSystem || o.WorkspaceId == _workspaceContext.WorkspaceId);
     }
 }
