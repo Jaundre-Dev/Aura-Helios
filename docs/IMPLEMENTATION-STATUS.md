@@ -1,76 +1,34 @@
-# Aura-Helios implementation status
+# HELIOS implementation status
 
-Living status for Helios delivery. The authoritative plan is
-[Aura-AI product split plan](../../Aura-AI/docs/PRODUCT-SPLIT-PLAN.md) §§7–9 and the focused
-[Helios plan](IMPLEMENTATION-PLAN.md). Aura-AI phases A0–A5 passed their acceptance gate on
-2026-09-20 (see Aura-AI/docs/IMPLEMENTATION-STATUS.md §A5), which unblocked Helios.
+Updated: 2026-09-28. Authority: [root implementation plan](../HELIOS-IMPLEMENTATION-PLAN.md).
 
-## Baseline (verified 2026-09-20)
+## Planning and cleanup handoff
 
-The scaffold + earlier work-packages build and test green on .NET 10:
+- Repository source reviewed against the new business API direction.
+- Root product plan, 68-service catalogue, review, Claude instructions and handoff prompt created.
+- Old product plans and unused engineering/agent/tool/model/realtime scaffold removed; deleted-file inventory is [REMOVED-LEGACY-FILES.txt](REMOVED-LEGACY-FILES.txt).
+- Customer navigation and package/product descriptions now reflect the API platform, with under-development labels.
+- Existing identity/workspace/project, audit, secret and object-store foundation retained.
+- Existing migrations, generated baseline SQL and historical audit field retained for schema compatibility.
+- No live database, customer data, sibling product, deployment or upstream account changed.
+- No new paid API, billing engine, provider integration or completed customer UI is claimed.
 
-- **Build:** `dotnet build Helios.sln` — 0 warnings / 0 errors.
-- **Tests:** 63 pass, 0 failed, 0 skipped — Unit 22, Architecture 4, Integration 37.
-  Integration tests run against a real MySQL (`helios_test`), applying the real EF migrations.
-- Architecture tests enforce the dependency direction (Api → Application → Domain; Infrastructure
-  implements Application abstractions).
+## Delivery tracking
 
-## H0 — Multi-tenant foundation
+| Phase | State | Evidence / next step |
+| --- | --- | --- |
+| P0 Safe foundation | Not started | Fix company authorisation, lockout, safe test fixture and toolchain; review lists findings |
+| P1 Portal/catalogue/keys | Not started | Implement company onboarding and first deterministic utility |
+| P2 Jobs/usage/billing | Not started | Durable jobs, idempotency and transactional ledger |
+| P3 Document products | Not started | Evaluated OCR and extraction through API and UI |
+| P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
+| P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
+| P6 Expansion | Backlog | Customer-led catalogue additions |
 
-Target (plan §8): *identity, roles, provisioning, projects, scoped storage, secrets, queue/worker
-lifecycle, capability registry, audit, metering and authorization tests.*
+## Validation
 
-### Done
+Static reference and diff checks are recorded in HELIOS-REVIEW.md. Backend compilation/testing is not established by this reset: global.json requires SDK 10.0.303 while 10.0.302 is installed. Frontend dependencies are not installed in the repository. Database integration tests were not run because the fixture deletes a fixed database. Historical green counts from retired plans must not be repeated as current results.
 
-- **Identity, roles, auth (WP0.4):** local ASP.NET Core Identity, JWT sign-in/registration, the
-  `sub`/`workspace_id`/`role` claim shape, and the authorization gate. Covered by `AuthEndpointTests`
-  and the token-issuer tests.
-- **Organizations, workspaces, projects, membership + provisioning (WP0.5):** minimal-API endpoints,
-  services and validators; creating a workspace makes the creator its owner; projects are workspace
-  scoped; RBAC forbids granting a role above your own.
-- **Tenant isolation + audit:** EF Core global query filters keyed on `IWorkspaceContext` make
-  isolation the default (a forgotten `WHERE` still cannot cross tenants); a stranger gets 404, not
-  403; every write stages an audit row in the same transaction (`AuditableEntityInterceptor`,
-  `AuditWriter`). Proven by `WorkspaceEndpointTests`.
-- **Secrets (WP0.6, 2026-09-20 — this slice):** a tenant-scoped `ISecretStore` implementation.
-  Values are sealed with **AES-256-GCM** by a configured, rotation-ready **`SecretKeyring`** before
-  they touch the database — the row carries only the `nonce‖ciphertext‖tag` envelope and the id of
-  the wrapping key, never the plaintext, never a plaintext column, never a log or audit line.
-  Secrets are reached only through the current workspace, so one tenant can neither read nor
-  overwrite another's under the same reference, and a system caller with no workspace is refused
-  outright. The master key is required from configuration (never generated at boot, never committed
-  to appsettings), failing before any secret is written rather than with a corrupted value. Nine
-  integration tests cover round-trip, overwrite-in-place, cross-tenant isolation, same-reference
-  independence, encryption-at-rest, audit-without-value, the system-caller refusal, and GCM
-  tamper-detection.
+## Required update format for Claude
 
-- **Scoped object storage (WP0.7, 2026-09-21 — this slice):** a tenant-scoped `IObjectStore` for run
-  outputs and uploads (the bytes behind an `Artifact.StorageRef`). Objects belong to a workspace and
-  are reachable only through the current workspace and the same global query filter, so an opaque
-  reference minted in one tenant resolves to nothing in another, and a system caller with no
-  workspace is refused. Content is bounded (16 MB) and held in the row behind the abstraction, so the
-  backend can become a filesystem or object store later without the reference or callers changing.
-  Eight integration tests: round-trip with metadata, unknown/malformed reference, cross-tenant
-  isolation (of both read and delete), delete + idempotent re-delete, empty and over-limit rejection,
-  system-caller refusal, and put/delete audit rows.
-
-### Remaining for H0
-
-- **Queue / worker lifecycle** — a real `IJobQueue` with bounded retries, leases, cancellation and
-  dead-letter handling; the worker currently has only the agent-run skeleton.
-- **Capability registry + runs API** — the `POST /api/v1/capabilities/{capability}/runs` contract
-  (run id, status, artifacts, cancel) and its registry.
-- **Metering** — per-tenant usage records.
-
-## H1–H6
-
-Pending. H1 (code review), H2 (testing), H3 (OCR), H4 (liveness), H5 (modules), H6 (operations) —
-see the plan. Aura-AI's preserved OCR/liveness/automation tables are exported/mapped into Helios in
-the phase that owns each.
-
-## Notes
-
-- **Aura-Enterprise remains untouched** and read-only.
-- The MySQL driver's `GuidFormat=Binary16` reads any 16-byte binary value back as a GUID, so
-  sealed secrets are stored as one variable-length envelope rather than separate fixed-width
-  nonce/tag columns — a foundation detail worth remembering for any future binary column.
+For each completed slice record: date, phase, real user-visible behaviour, changed files, exact validation commands and outcomes, remaining blockers, and next concrete step. Mark a phase complete only after its acceptance gate passes. Distinguish synthetic sandbox functionality from verified live integration.

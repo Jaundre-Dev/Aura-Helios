@@ -1,13 +1,8 @@
-using Helios.Worker.Agents;
-
 var builder = Host.CreateApplicationBuilder(args);
 
-// TODO Phase 0: builder.Services.AddHeliosInfrastructure(builder.Configuration);
-// TODO Phase 0: builder.Services.AddHeliosApplication();
-
-builder.Services.AddHostedService<AgentRunWorker>();
-
-// TODO Phase 2+: WorkflowWorker, IngestionWorker, EvaluationWorker, MaintenanceWorker.
-
+// Durable API job execution is implemented in P2 of HELIOS-IMPLEMENTATION-PLAN.md.
+// Do not register a no-op processor that could be mistaken for a working queue.
 var host = builder.Build();
+host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Helios.Worker")
+    .LogWarning("HELIOS worker has no job processor configured. Platform implementation is pending.");
 host.Run();

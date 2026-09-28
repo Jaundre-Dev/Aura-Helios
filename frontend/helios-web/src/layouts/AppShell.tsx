@@ -52,7 +52,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className={styles.shell}>
       <header className={styles.header}>
         <Body1Strong>HELIOS</Body1Strong>
-        <Caption1 style={{ opacity: 0.6 }}>Ctrl+K to search</Caption1>
+        <Caption1 style={{ opacity: 0.6 }}>Business APIs · Under development</Caption1>
       </header>
 
       <nav className={styles.rail}>

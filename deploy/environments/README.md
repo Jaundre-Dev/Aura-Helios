@@ -1,17 +1,7 @@
-# Environments
+# Deployment environments
 
-One folder per environment once there is more than a laptop.
+The API platform uses separate development, staging and production configuration. Keep credentials out of committed files; use approved secret configuration and document rotation/recovery.
 
-| File | Purpose |
-| --- | --- |
-| `development.env` | Local Docker Compose. Never contains a real credential. |
-| `staging.env` | Pre-production. Cloud providers allowed, production tools are not. |
-| `production.env` | Real workloads. Values come from the secret store, not from this folder. |
+Sandbox and live are separate customer execution/billing environments, not interchangeable with deployment stages. Production must reject mock payment/verification adapters. Route customer data only to approved providers and regions according to product and tenant policy.
 
-Rules:
-
-- Committed files hold shape and defaults only. Real secrets resolve through `ISecretStore`.
-- `RESTRICTED` data stays on local inference in every environment unless a workspace
-  policy explicitly permits otherwise.
-- Production tool permissions (`WRITE_PRODUCTION`, `DELETE_RESOURCE`, `DEPLOY`) require
-  an approval policy — they are never granted by an environment file alone.
+See ../../HELIOS-IMPLEMENTATION-PLAN.md and ../../HELIOS-REVIEW.md. Current deployment scaffolding has not passed the new P0 acceptance gate.

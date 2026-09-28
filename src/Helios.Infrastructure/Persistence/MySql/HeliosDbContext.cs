@@ -10,9 +10,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Helios.Infrastructure.Persistence.MySql;
 
 /// <summary>
-/// MySQL is the source of truth (plan section 9). Only Phase 0 tables have a DbSet here —
-/// agents, models, knowledge and the rest arrive with the phase that uses them, so the
-/// schema never runs ahead of the code.
+/// MySQL is the durable source of truth. Existing identity, audit and storage tables
+/// are retained; API products, requests and billing arrive through additive migrations.
 /// </summary>
 public class HeliosDbContext(
     DbContextOptions<HeliosDbContext> options,

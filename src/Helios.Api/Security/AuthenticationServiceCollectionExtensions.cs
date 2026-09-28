@@ -50,24 +50,6 @@ public static class AuthenticationServiceCollectionExtensions
                     RoleClaimType = HeliosClaims.Role,
                 };
 
-                bearer.Events = new JwtBearerEvents
-                {
-                    // A browser cannot set an Authorization header on a websocket, so the
-                    // SignalR client sends the token in the query string. Accept it there,
-                    // but only for hub paths — never for the REST surface.
-                    OnMessageReceived = context =>
-                    {
-                        var accessToken = context.Request.Query["access_token"];
-
-                        if (!string.IsNullOrEmpty(accessToken) &&
-                            context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
-                        {
-                            context.Token = accessToken;
-                        }
-
-                        return Task.CompletedTask;
-                    }
-                };
             });
 
         services.AddAuthorization();

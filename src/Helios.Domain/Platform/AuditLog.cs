@@ -7,6 +7,7 @@ public class AuditLog : Entity
 {
     public DateTimeOffset OccurredAt { get; set; } = DateTimeOffset.UtcNow;
     public Guid? ActorUserId { get; set; }
+    // Historical database field retained for migration compatibility, not an active agent feature.
     public Guid? AgentRunId { get; set; }
     public Guid? WorkspaceId { get; set; }
 

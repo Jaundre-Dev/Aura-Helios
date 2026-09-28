@@ -16,7 +16,7 @@
     EF Core 9 targets net8.0 and runs correctly on net10.0 — this split is supported and
     intentional, not a workaround waiting to be tidied up.
 
-    See docs/adr/0003-ef-core-9-pin.md. Revisit when Pomelo ships an EF Core 10 provider.
+    See HELIOS-IMPLEMENTATION-PLAN.md. Revalidate provider compatibility before upgrades.
   -->
 
   <PropertyGroup>
@@ -36,7 +36,6 @@
   <ItemGroup>
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.11" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.11" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />

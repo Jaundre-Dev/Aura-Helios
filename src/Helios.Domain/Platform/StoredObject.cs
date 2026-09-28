@@ -3,7 +3,7 @@ using Helios.Domain.Common;
 namespace Helios.Domain.Platform;
 
 /// <summary>
-/// A stored object — the bytes behind an <see cref="Artifact.StorageRef"/> or an upload. Isolated
+/// A stored object containing an upload or processing result. Isolated
 /// by <see cref="WorkspaceId"/> through the same global query filter as every other tenant-scoped
 /// aggregate, so a reference is meaningless outside the workspace that created it. The content lives
 /// in the row for now; the abstraction over it (<c>IObjectStore</c>) lets the backend become a

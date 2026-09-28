@@ -1,18 +1,15 @@
 using Helios.Api.Configuration;
 using Helios.Api.Endpoints;
 using Helios.Api.Middleware;
-using Helios.Api.Hubs;
 using Helios.Api.Security;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.DependencyInjection;
-using Helios.Contracts.Realtime;
 using Helios.Infrastructure.DependencyInjection;
 using Helios.Infrastructure.Persistence.MySql;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
-builder.Services.AddSignalR();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<HeliosExceptionHandler>();
 
@@ -61,15 +58,6 @@ app.MapGet("/health/ready", async (HeliosDbContext db, CancellationToken ct) =>
         : Results.Json(new { status = "not-ready", mysql = "down" }, statusCode: 503);
 })
 .WithName("Readiness");
-
-// Hubs require a valid token. A browser sends it in the query string on the websocket
-// handshake, which JwtBearerEvents.OnMessageReceived accepts for /hubs paths only.
-app.MapHub<WorkspaceHub>(HubRoutes.Workspace).RequireAuthorization();
-app.MapHub<AgentHub>(HubRoutes.Agent).RequireAuthorization();
-app.MapHub<ProjectHub>(HubRoutes.Project).RequireAuthorization();
-app.MapHub<NotificationHub>(HubRoutes.Notification).RequireAuthorization();
-app.MapHub<WorkflowHub>(HubRoutes.Workflow).RequireAuthorization();
-app.MapHub<MonitoringHub>(HubRoutes.Monitoring).RequireAuthorization();
 
 app.MapAuthEndpoints();
 app.MapOrganizationEndpoints();

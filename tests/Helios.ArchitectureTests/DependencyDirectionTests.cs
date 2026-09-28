@@ -1,19 +1,19 @@
 using System.Reflection;
-using Helios.Application.Abstractions.Ai;
+using Helios.Application.Abstractions.Persistence;
 using Helios.Contracts.Common;
 using Helios.Domain.Common;
 
 namespace Helios.ArchitectureTests;
 
 /// <summary>
-/// The layering in docs/architecture/overview.md is enforced here rather than
+/// The layering in HELIOS-IMPLEMENTATION-PLAN.md is enforced here rather than
 /// remembered. A modular monolith only stays modular if something fails the build.
 /// </summary>
 public class DependencyDirectionTests
 {
     private static readonly Assembly Contracts = typeof(DataClassification).Assembly;
     private static readonly Assembly Domain = typeof(Entity).Assembly;
-    private static readonly Assembly Application = typeof(IModelGateway).Assembly;
+    private static readonly Assembly Application = typeof(IHeliosDbContext).Assembly;
 
     private static IEnumerable<string> HeliosReferencesOf(Assembly assembly) =>
         assembly.GetReferencedAssemblies()
