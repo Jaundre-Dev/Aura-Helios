@@ -19,7 +19,7 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | P0 Safe foundation | Backend complete; gate **not fully passed** | Backend build, unit, architecture and disposable-database integration tests pass (slice P0.1 below). Outstanding: frontend lockfile + production build (no npm on this machine), Docker image builds (no Docker on this machine) |
 | P1 Portal/catalogue/keys | Backend complete; gate **not passed** | API side of the gate passes (slice P1.1 below). Outstanding: functional portal pages (sign-in, company, team, catalogue, keys) — blocked on Node.js/npm |
 | P2 Jobs/usage/billing | **Gate items pass (API)**; scope gaps listed | All six P2 gate conditions are covered by passing integration tests (slices P2.1–P2.3). Platform administration API with TOTP step-up (P2.4); lease renewal and delivery retention (P2.5). Not done: invoices (blocked on accounting confirmation of tax-invoice rules), a real payment gateway (blocked on contract), portal and admin views (blocked on Node.js) |
-| P3 Document products | In progress (gate not passed) | Safe uploads (P3.1); ocr.general and documents.invoice v1 (P3.2); bank statement, payslip, proof of address and classification v1 (P3.3) — native PDFs, sandbox only; review corrections and export (P3.4). Gate needs an owner-approved representative dataset, written targets and an OCR engine decision |
+| P3 Document products | In progress (gate not passed) | Safe uploads (P3.1); ocr.general and documents.invoice v1 (P3.2); bank statement, payslip, proof of address and classification v1 (P3.3) — native PDFs, sandbox only; review corrections and export (P3.4); evaluation harness (P3.5). Gate needs an owner-approved representative dataset, written targets and an OCR engine decision |
 | P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
 | P6 Expansion | Backlog | Customer-led catalogue additions |
@@ -402,6 +402,42 @@ Forward migration `20261003142237_ReviewDecisions`: `review_decisions` (FK to `a
 - a held-open provider call whose lease visibly advances, then completes and settles once;
 - a takeover (fencing token moved) that cancels the executor, commits nothing, and is later recovered with exactly one usage row and one settlement;
 - old delivered and failed deliveries purged while old pending and recent ones are kept.
+
+## Slice P3.5 — accuracy evaluation harness (2026-10-03)
+
+- **`helios-evaluate`** (new console project `src/Helios.Evaluation`) runs a product version in process over an owner-supplied labelled dataset and writes `report.json` and `report.md`. It reports:
+  - per-path accuracy (correct, wrong, missed, invented);
+  - invented values;
+  - review rate;
+  - p50/p95 processing time (after one untimed warm-up);
+  - each written target as met or missed.
+
+  Exit 0 means all targets met; 2 means missed or none written; 1 means the run could not start.
+- Paths are the reviewer paths (`fields.total`, `transactions[0].direction`, `type`). An expected `null` means the value must not be extracted.
+- Safeguards:
+  - Refuses a dataset folder inside a HELIOS checkout, so customer documents stay out of source control.
+  - Document paths cannot escape their dataset folder.
+  - Reports omit document values unless `--include-values` is given.
+  - Without written targets the gate cannot pass.
+- Format and usage: [EVALUATION.md](EVALUATION.md). Core logic: `Application/Features/Evaluation`.
+
+| Command | Result |
+| --- | --- |
+| `dotnet build Helios.sln` | Succeeded, 0 warnings, 0 errors |
+| `dotnet test Helios.sln --no-build` | UnitTests 174, ArchitectureTests 4, IntegrationTests 216 — all passed |
+| `dotnet run --project src/Helios.Evaluation -- <synthetic statements outside repo>` | All written targets met, exit 0; reports written |
+| Same command with the dataset inside the repository | Refused, exit 1 |
+
+`EvaluatorTests` cover:
+- per-path tallies, including a deliberately wrong label and a missed field;
+- targets met and missed, and the absent-target case;
+- redaction of values;
+- unreadable-document errors failing the gate;
+- product mismatch refusal;
+- the comparison rules;
+- path resolution.
+
+**This is a measuring tool, not a measurement.** No representative dataset exists yet, so no product has a measured result and the P3 gate is still open.
 
 ## Required update format for Claude
 
