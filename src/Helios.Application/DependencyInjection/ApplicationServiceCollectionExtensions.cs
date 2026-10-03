@@ -4,6 +4,7 @@ using Helios.Application.Features.Billing;
 using Helios.Application.Features.Catalogue;
 using Helios.Application.Features.Execution;
 using Helios.Application.Features.Identity;
+using Helios.Application.Features.Platform;
 using Helios.Application.Features.Products;
 using Helios.Application.Features.Products.Documents;
 using Helios.Application.Features.Products.Identity;
@@ -45,6 +46,11 @@ public static class ApplicationServiceCollectionExtensions
 
         services.AddScoped<WebhookOutbox>();
         services.AddScoped<WebhookService>();
+
+        services.AddScoped<PlatformAccess>();
+        services.AddScoped<PlatformStaffService>();
+        services.AddScoped<PlatformAdministrationService>();
+        services.AddScoped<PlatformOperationsService>();
 
         // First-party product executors. Each callable catalogue product needs exactly one here.
         services.AddSingleton<IProductExecutor, SaIdValidateExecutor>();

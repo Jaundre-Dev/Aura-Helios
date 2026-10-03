@@ -54,6 +54,7 @@ public class HeliosDbContext(
     public DbSet<WebhookEndpoint> WebhookEndpoints => Set<WebhookEndpoint>();
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
     public DbSet<Upload> Uploads => Set<Upload>();
+    public DbSet<PlatformStaffMember> PlatformStaff => Set<PlatformStaffMember>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

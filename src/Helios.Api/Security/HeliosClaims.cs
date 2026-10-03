@@ -28,4 +28,13 @@ public static class HeliosClaims
 
     /// <summary>Set only on API-key principals: <c>Sandbox</c> or <c>Live</c>.</summary>
     public const string Environment = "environment";
+
+    /// <summary>
+    /// Set only on a platform step-up session: the staff role it was issued under. The session
+    /// validator compares it with the staff record on every request.
+    /// </summary>
+    public const string PlatformRole = "platform_role";
+
+    /// <summary>Authentication methods. <c>mfa</c> on platform sessions, proven with an authenticator code.</summary>
+    public const string AuthenticationMethod = "amr";
 }

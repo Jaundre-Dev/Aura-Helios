@@ -2463,5 +2463,65 @@ DELIMITER ;
 CALL MigrationsScript();
 DROP PROCEDURE MigrationsScript;
 
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003140132_PlatformAdministration') THEN
+
+    CREATE TABLE `platform_staff` (
+        `id` binary(16) NOT NULL,
+        `user_id` binary(16) NOT NULL,
+        `role` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `is_active` tinyint(1) NOT NULL,
+        `totp_secret_envelope` varbinary(256) NULL,
+        `totp_key_id` varchar(64) CHARACTER SET utf8mb4 NULL,
+        `totp_confirmed_at` datetime(6) NULL,
+        `last_totp_step` bigint NULL,
+        `failed_code_count` int NOT NULL,
+        `code_locked_until` datetime(6) NULL,
+        `created_at` datetime(6) NOT NULL,
+        `created_by` binary(16) NULL,
+        `updated_at` datetime(6) NULL,
+        `updated_by` binary(16) NULL,
+        CONSTRAINT `pk_platform_staff` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_platform_staff_users_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003140132_PlatformAdministration') THEN
+
+    CREATE UNIQUE INDEX `ix_platform_staff_user_id` ON `platform_staff` (`user_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003140132_PlatformAdministration') THEN
+
+    INSERT INTO `__helios_migrations_history` (`MigrationId`, `ProductVersion`)
+    VALUES ('20261003140132_PlatformAdministration', '9.0.19');
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
 COMMIT;
 

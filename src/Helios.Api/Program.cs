@@ -8,7 +8,11 @@ using Helios.Infrastructure.DependencyInjection;
 using Helios.Infrastructure.Persistence.MySql;
 using Microsoft.AspNetCore.HttpOverrides;
 
-var builder = WebApplication.CreateBuilder(args);
+// `platform-staff grant <email> <role>` is a host console command (first Administrator); see
+// PlatformStaffCommand. Anything else starts the API.
+var consoleCommand = PlatformStaffCommand.TryParse(args, out var hostArgs);
+
+var builder = WebApplication.CreateBuilder(hostArgs);
 
 builder.Services.AddOpenApi();
 
@@ -56,6 +60,12 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+if (consoleCommand is not null)
+{
+    Environment.ExitCode = await consoleCommand.RunAsync(app.Services, Console.Out);
+    return;
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
@@ -91,6 +101,7 @@ app.MapOrganizationEndpoints();
 app.MapWorkspaceEndpoints();
 app.MapProjectEndpoints();
 app.MapPlatformEndpoints();
+app.MapPlatformAdminEndpoints();
 
 app.Run();
 

@@ -18,7 +18,7 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | --- | --- | --- |
 | P0 Safe foundation | Backend complete; gate **not fully passed** | Backend build, unit, architecture and disposable-database integration tests pass (slice P0.1 below). Outstanding: frontend lockfile + production build (no npm on this machine), Docker image builds (no Docker on this machine) |
 | P1 Portal/catalogue/keys | Backend complete; gate **not passed** | API side of the gate passes (slice P1.1 below). Outstanding: functional portal pages (sign-in, company, team, catalogue, keys) — blocked on Node.js/npm |
-| P2 Jobs/usage/billing | **Gate items pass (API)**; scope gaps listed | All six P2 gate conditions are covered by passing integration tests (slices P2.1–P2.3). Not done: invoices (blocked on accounting confirmation of tax-invoice rules), a real payment gateway (blocked on contract), portal views (blocked on Node.js), platform admin for prices/adjustments |
+| P2 Jobs/usage/billing | **Gate items pass (API)**; scope gaps listed | All six P2 gate conditions are covered by passing integration tests (slices P2.1–P2.3). Platform administration API with TOTP step-up added (P2.4). Not done: invoices (blocked on accounting confirmation of tax-invoice rules), a real payment gateway (blocked on contract), portal and admin views (blocked on Node.js) |
 | P3 Document products | In progress (gate not passed) | Safe uploads (P3.1); ocr.general and documents.invoice v1 for native PDFs, sandbox only (P3.2). Gate needs an owner-approved representative dataset, written targets and an OCR engine decision |
 | P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
@@ -252,6 +252,68 @@ A first version of the JavaScript fixture lacked a cross-reference table, so it 
 Validation: `dotnet test Helios.sln` → UnitTests 116, ArchitectureTests 4, IntegrationTests 180, all passed; 0 build warnings.
 
 **P3 gate not passed:** accuracy, review-rate and latency have only been exercised on synthetic PDFs. The gate needs an owner-approved, lawfully obtained representative dataset and written targets. Remaining P3 work: an evaluation harness/report over such a dataset, an OCR engine decision for scanned documents, and the other document products (SA ID, statement, payslip, proof of address, classification).
+
+## Slice P2.4 — platform administration (2026-10-03)
+
+### Behaviour now in place (API only)
+
+- **Platform staff** (`platform_staff`): roles Administrator, Finance, Support, mapped to named permissions and held apart from customer company roles. Support has no access to money, staff, approvals or the catalogue; Finance has no access to staff, approvals or the catalogue. No staff member can grant, change, deactivate or reset their own record. No platform route returns customer inputs, documents or results.
+- **First Administrator**: a host console command, `dotnet Helios.Api.dll platform-staff grant <email> <Administrator|Finance|Support>`, for an account that has already registered. It is not reachable over HTTP and is audited with source `console`.
+- **Mandatory MFA (plan section 5)**: `POST /api/v1/platform/mfa/enrol` returns an RFC 6238 authenticator secret once. `…/confirm` and `…/verify` take a code and issue a **15-minute platform session** (`platform_role` + `amr=mfa` claims). That session is the only credential `/api/v1/platform/*` accepts; ordinary tokens (even a staff member's own) and API keys get 403. A code is accepted only for a time step later than the last one accepted, using one conditional update, so it cannot be replayed. Five bad codes lock the staff member for 15 minutes. Once an authenticator is confirmed, it can only be re-enrolled after another Administrator resets it. Secrets are sealed with the keyring. Every request re-checks the staff row, so deactivation, a role change or an MFA reset ends the session immediately.
+- **Administration** (`/api/v1/platform/…`):
+  - Tenant list with members and balances.
+  - Approve or reject restricted entitlements with a reason. An approval cannot enable a product that is not callable.
+  - Release-state changes. Callable states require an executor and a published version; Beta and Live also require a current live price.
+  - Price publishing. Prices cannot take effect in the past.
+  - Credit adjustments: idempotent per reference, reusing a reference for a different amount gives 409, R100 000 cap, whole cents, and a debit cannot go below zero.
+  - Review lists of payment events (refunds, chargebacks, rejected callbacks).
+  - A cross-tenant audit trail (Administrator only).
+- **Operations**:
+  - Job queue (NeedsReview and Reconciling by default).
+  - Resolution of requests stuck in review. **Release** fails the request, releases the reservation once and notifies the customer. **Reconcile** asks the provider again with a fresh budget. There is deliberately no "settle without a result".
+  - Dead-letter webhook list, and retry to active endpoints only.
+- Every denial and change is audited with actor, tenant and reason.
+
+### Fix found during this slice
+
+The webhook outbox now skips an event an endpoint already has. Before, a request returning to review a second time would hit the unique index and roll back its own state change. It also reads endpoints with an explicit workspace filter instead of the ambient one, so platform-side resolutions notify the customer.
+
+### Schema
+
+Forward migration `20261003140132_PlatformAdministration`: `platform_staff` (unique user, FK to users). Idempotent deployment script regenerated (nine migrations, additive diff only).
+
+### Validation (2026-10-03)
+
+| Command | Result |
+| --- | --- |
+| `dotnet build Helios.sln` | Succeeded, 0 warnings, 0 errors |
+| `dotnet test Helios.sln --no-build` | UnitTests 131, ArchitectureTests 4, IntegrationTests 196 — all passed |
+| Mutation: TOTP replay check relaxed (`<` → `<=`) | `A_code_is_accepted_once_and_never_replayed` failed as intended; restored |
+
+Unit tests check TOTP against the RFC 6238 SHA-1 vectors and RFC 4648 base32, plus the platform role separations. `PlatformAdministrationTests` (16) covers:
+
+- ordinary sessions and keys refused;
+- customers cannot enrol;
+- replay refused, and lockout after five codes;
+- deactivation, role change and MFA reset end sessions;
+- no self-changes;
+- role separation with audited denials;
+- credit idempotency, bounds and overdraw;
+- backdated, unimplemented and unpriced release refusals;
+- suspend and restore audited;
+- future price closes the current one;
+- approval and rejection with reasons;
+- a review release charges nothing and notifies once;
+- re-reconciliation returns to review without a duplicate event;
+- dead-letter retry, including the deactivated-endpoint refusal;
+- the console command.
+
+### Remaining
+
+- No admin portal UI (needs Node.js).
+- Customer MFA, email verification and password reset are still not built.
+- A refund and chargeback reversal policy needs an owner or accountant decision before those events can move money.
+- No two-person approval for large adjustments (the cap is the current control).
 
 ## Required update format for Claude
 

@@ -28,4 +28,8 @@ public sealed class JwtOptions
 
     [Range(1, 1440)]
     public int TokenLifetimeMinutes { get; init; } = 60;
+
+    /// <summary>Lifetime of a platform (staff) step-up session. Short: it unlocks money and approvals.</summary>
+    [Range(1, 60)]
+    public int PlatformTokenLifetimeMinutes { get; init; } = 15;
 }

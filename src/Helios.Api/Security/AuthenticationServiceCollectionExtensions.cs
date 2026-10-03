@@ -93,6 +93,15 @@ public static class AuthenticationServiceCollectionExtensions
             authorization.AddPolicy(ProductCallerPolicy, policy => policy
                 .AddAuthenticationSchemes(SelectorScheme)
                 .RequireAuthenticatedUser());
+
+            // Platform administration: a staff step-up session, proven with an authenticator code.
+            // An ordinary sign-in token — even a staff member's — is refused (403).
+            authorization.AddPolicy(HeliosAuthPolicies.PlatformStaff, policy => policy
+                .AddAuthenticationSchemes(SelectorScheme)
+                .RequireAuthenticatedUser()
+                .RequireClaim(HeliosClaims.Subject)
+                .RequireClaim(HeliosClaims.PlatformRole)
+                .RequireClaim(HeliosClaims.AuthenticationMethod, "mfa"));
         });
 
         return services;
@@ -110,4 +119,7 @@ public static class HeliosAuthPolicies
 
     /// <summary>A signed-in person or an API key: product execution and request reads.</summary>
     public const string ProductCaller = "product-caller";
+
+    /// <summary>Platform staff with a step-up (MFA) platform session.</summary>
+    public const string PlatformStaff = "platform-staff";
 }

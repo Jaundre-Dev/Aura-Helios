@@ -40,6 +40,23 @@ public sealed class SessionValidator(HeliosDbContext db)
             return "Session has been revoked.";
         }
 
+        if (principal.FindFirstValue(HeliosClaims.PlatformRole) is { } platformRole)
+        {
+            var staff = await db.PlatformStaff
+                .AsNoTracking()
+                .Where(s => s.UserId == userId)
+                .Select(s => new { s.IsActive, s.Role, s.TotpConfirmedAt })
+                .SingleOrDefaultAsync(ct);
+
+            // Deactivation, a role change or an authenticator reset ends platform sessions at once.
+            if (staff is null || !staff.IsActive || staff.TotpConfirmedAt is null ||
+                !string.Equals(staff.Role.ToString(), platformRole, StringComparison.Ordinal) ||
+                principal.FindFirstValue(HeliosClaims.AuthenticationMethod) != "mfa")
+            {
+                return "Platform access has been revoked.";
+            }
+        }
+
         if (principal.WorkspaceId() is not { } workspaceId)
         {
             return null;

@@ -30,7 +30,10 @@ public sealed class WebhookOutbox(IHeliosDbContext db, TimeProvider clock)
     {
         var eventType = EventTypeFor(request.Status);
 
+        // Filtered explicitly to the request's own workspace, so this also works for platform staff
+        // resolving a request, whose session belongs to no workspace.
         var endpoints = await db.WebhookEndpoints
+            .IgnoreQueryFilters()
             .Where(e => e.WorkspaceId == request.WorkspaceId && e.IsActive)
             .ToListAsync(ct);
 
@@ -42,6 +45,23 @@ public sealed class WebhookOutbox(IHeliosDbContext db, TimeProvider clock)
 
         // Deterministic per request and event type, so a delivery can never be enqueued twice.
         var eventId = $"evt_{request.Id:N}_{eventType.Replace('.', '_')}";
+
+        // A request can reach the same state twice (sent back from review to reconciliation, then
+        // to review again). The customer was already told; the unique index would otherwise roll
+        // back the state change itself.
+        var subscribedIds = subscribed.Select(e => e.Id).ToList();
+        var alreadyQueued = await db.WebhookDeliveries
+            .IgnoreQueryFilters()
+            .Where(d => subscribedIds.Contains(d.EndpointId) && d.EventId == eventId)
+            .Select(d => d.EndpointId)
+            .ToListAsync(ct);
+
+        subscribed = subscribed.Where(e => !alreadyQueued.Contains(e.Id)).ToList();
+        if (subscribed.Count == 0)
+        {
+            return;
+        }
+
         var now = clock.GetUtcNow();
 
         var payload = JsonSerializer.Serialize(new

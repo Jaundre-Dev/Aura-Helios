@@ -50,6 +50,7 @@ public interface IHeliosDbContext
     DbSet<WebhookEndpoint> WebhookEndpoints { get; }
     DbSet<WebhookDelivery> WebhookDeliveries { get; }
     DbSet<Upload> Uploads { get; }
+    DbSet<PlatformStaffMember> PlatformStaff { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
