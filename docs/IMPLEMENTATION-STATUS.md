@@ -18,7 +18,7 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | --- | --- | --- |
 | P0 Safe foundation | Backend complete; gate **not fully passed** | Backend build, unit, architecture and disposable-database integration tests pass (slice P0.1 below). Outstanding: frontend lockfile + production build (no npm on this machine), Docker image builds (no Docker on this machine) |
 | P1 Portal/catalogue/keys | Backend complete; gate **not passed** | API side of the gate passes (slice P1.1 below). Outstanding: functional portal pages (sign-in, company, team, catalogue, keys) — blocked on Node.js/npm |
-| P2 Jobs/usage/billing | In progress | Ledger, reservations, prices and durable jobs done (slice P2.1). Outstanding: payment gateway + verified callbacks, balance/usage/transaction views, customer webhooks |
+| P2 Jobs/usage/billing | In progress | Ledger, reservations, prices, durable jobs (P2.1); payments with verified callbacks and finance views (P2.2). Outstanding: customer webhooks; invoices blocked on accounting rules; real gateway blocked on contract |
 | P3 Document products | Not started | Evaluated OCR and extraction through API and UI |
 | P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
@@ -150,6 +150,34 @@ P2 gate items covered by `BillingAndExecutionTests` (test-only `test.metered` / 
 ### Remaining P2 work
 
 Payment gateway adapter and verified, deduplicated callbacks (no gateway contract exists — a clearly named fake test gateway will stand in, refused in Production); customer balance/usage/transaction endpoints; signed customer webhooks with delivery records and SSRF protection; invoices (blocked on accounting confirmation of tax-invoice rules); lease renewal for long-running jobs; a price/adjustment administration surface for platform staff.
+
+## Slice P2.2 — top-ups, verified payment callbacks, finance views (2026-10-03)
+
+### Behaviour now in place
+
+- **Gateway boundary** `IPaymentGateway`: create checkout; verify a callback (authenticity + freshness) and parse it. Configured by `Helios:Payments:Gateway`. With none configured, top-ups return `503 payments_unavailable` — nothing is faked. Any unknown gateway name fails startup.
+- **`fake-test` gateway** (development/tests only — **no real gateway is integrated; that needs a signed contract**): HMAC-SHA256 over `"{timestamp}.{body}"`, constant-time comparison, ±5-minute freshness window, unroutable `payments.invalid` checkout URLs. Production refuses to start with it.
+- **Top-ups** `POST /api/v1/organizations/{id}/billing/top-ups` (`ManageBilling`: Owner, Finance): R10–R100 000 in whole cents; creates a pending payment, then asks the gateway for a checkout. Nothing is credited at this point, and there is no endpoint that credits on a browser redirect.
+- **Callbacks** `POST /api/v1/payments/callbacks/{gateway}` (anonymous, signature-authenticated, 64 KB cap): unverifiable → 401 and nothing recorded. A verified event is recorded once per (gateway, event id); the payment row is locked; the event must match merchant, currency, exact amount and a known reference or it is recorded as `Rejected`. A success credits the ledger once (posting key `topup:{payment}` is a second guard); duplicates and a failure after success have no effect; refunds and chargebacks are recorded as `NeedsReview` with no ledger change, because no reversal or negative-balance policy has been approved.
+- **Finance views** (`ViewBilling`: Owner, Finance): `GET …/billing/balance` (settled, reserved, available), `…/transactions` (ledger history as available and reserved changes), `…/usage?from&to` (per product and environment, company-wide), `…/payments`.
+
+### Schema
+
+Forward migration `Payments`: `payments` (unique gateway + reference), `payment_events` (unique gateway + event id).
+
+### Validation (2026-10-03)
+
+| Command | Result |
+| --- | --- |
+| `dotnet build Helios.sln` | Succeeded, 0 warnings, 0 errors |
+| `dotnet test Helios.sln --no-build` | UnitTests 60, ArchitectureTests 4, IntegrationTests 135 — all passed |
+| Mutation: amount match disabled | `…mismatched_callback_is_rejected(amount)` failed as intended; restored |
+
+`PaymentTests` cover: no credit before confirmation; three replays plus a distinct duplicate success credit once; ten concurrent deliveries credit once (one ledger transaction); amount, currency, merchant and unknown-reference mismatches are rejected and recorded; forged, stale (30 min) and unsigned callbacks are 401 with nothing recorded; a failure after success is ignored; a refund changes no money; Developer cannot top up or see balance, a non-member gets 404, Finance can do both; amount bounds; and end to end, a verified top-up funds live usage that then appears in balance, usage and transactions.
+
+### Remaining
+
+Real gateway adapter (contract, merchant credentials, settlement reconciliation); refund/chargeback policy; invoices (tax-invoice vs receipt rules need accounting confirmation); customer webhooks (next slice).
 
 ## Required update format for Claude
 

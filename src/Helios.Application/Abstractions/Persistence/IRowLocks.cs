@@ -43,4 +43,7 @@ public interface IRowLocks
 
     /// <summary>A request's reservation, exclusively locked until commit, or null when there is none.</summary>
     Task<Reservation?> LockReservationAsync(Guid apiRequestId, CancellationToken cancellationToken);
+
+    /// <summary>A payment by gateway reference, exclusively locked until commit, or null when unknown.</summary>
+    Task<Payment?> LockPaymentAsync(string gateway, string gatewayReference, CancellationToken cancellationToken);
 }

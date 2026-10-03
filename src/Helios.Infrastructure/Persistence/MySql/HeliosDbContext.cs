@@ -47,6 +47,8 @@ public class HeliosDbContext(
     public DbSet<PriceVersion> PriceVersions => Set<PriceVersion>();
     public DbSet<UsageEvent> UsageEvents => Set<UsageEvent>();
     public DbSet<Job> Jobs => Set<Job>();
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -2049,5 +2049,133 @@ DELIMITER ;
 CALL MigrationsScript();
 DROP PROCEDURE MigrationsScript;
 
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003103826_Payments') THEN
+
+    CREATE TABLE `payments` (
+        `id` binary(16) NOT NULL,
+        `organization_id` binary(16) NOT NULL,
+        `gateway` varchar(50) CHARACTER SET utf8mb4 NOT NULL,
+        `gateway_reference` varchar(200) CHARACTER SET utf8mb4 NULL,
+        `amount` decimal(19,6) NOT NULL,
+        `currency` varchar(3) CHARACTER SET utf8mb4 NOT NULL,
+        `status` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `checkout_url` varchar(2000) CHARACTER SET utf8mb4 NULL,
+        `created_by` binary(16) NULL,
+        `created_at` datetime(6) NOT NULL,
+        `completed_at` datetime(6) NULL,
+        `credited_at` datetime(6) NULL,
+        CONSTRAINT `pk_payments` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_payments_organizations_organization_id` FOREIGN KEY (`organization_id`) REFERENCES `organizations` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003103826_Payments') THEN
+
+    CREATE TABLE `payment_events` (
+        `id` binary(16) NOT NULL,
+        `gateway` varchar(50) CHARACTER SET utf8mb4 NOT NULL,
+        `event_id` varchar(200) CHARACTER SET utf8mb4 NOT NULL,
+        `payment_id` binary(16) NULL,
+        `type` varchar(30) CHARACTER SET utf8mb4 NOT NULL,
+        `amount` decimal(19,6) NOT NULL,
+        `currency` varchar(3) CHARACTER SET utf8mb4 NOT NULL,
+        `outcome` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `reason` varchar(100) CHARACTER SET utf8mb4 NULL,
+        `payload_hash` varchar(64) CHARACTER SET utf8mb4 NOT NULL,
+        `received_at` datetime(6) NOT NULL,
+        CONSTRAINT `pk_payment_events` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_payment_events_payments_payment_id` FOREIGN KEY (`payment_id`) REFERENCES `payments` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003103826_Payments') THEN
+
+    CREATE UNIQUE INDEX `ix_payment_events_gateway_event_id` ON `payment_events` (`gateway`, `event_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003103826_Payments') THEN
+
+    CREATE INDEX `ix_payment_events_payment_id` ON `payment_events` (`payment_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003103826_Payments') THEN
+
+    CREATE UNIQUE INDEX `ix_payments_gateway_gateway_reference` ON `payments` (`gateway`, `gateway_reference`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003103826_Payments') THEN
+
+    CREATE INDEX `ix_payments_organization_id_created_at` ON `payments` (`organization_id`, `created_at`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003103826_Payments') THEN
+
+    INSERT INTO `__helios_migrations_history` (`MigrationId`, `ProductVersion`)
+    VALUES ('20261003103826_Payments', '9.0.19');
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
 COMMIT;
 

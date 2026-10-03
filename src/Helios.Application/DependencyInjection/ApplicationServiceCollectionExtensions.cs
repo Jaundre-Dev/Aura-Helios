@@ -33,6 +33,8 @@ public static class ApplicationServiceCollectionExtensions
 
         services.AddScoped<LedgerService>();
         services.AddScoped<PriceService>();
+        services.AddScoped<PaymentService>();
+        services.AddScoped<BillingQueryService>();
         services.AddScoped<JobRunner>();
         services.AddSingleton<JobWorker>();
 

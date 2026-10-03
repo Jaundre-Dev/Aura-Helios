@@ -35,5 +35,8 @@ public sealed class InsufficientCreditException(decimal available, decimal requi
 /// <summary>A client error that is not a field validation failure (400), with a machine-readable code.</summary>
 public sealed class BadRequestException(string message, string code) : HeliosException(message, code);
 
+/// <summary>A dependency HELIOS needs is not available or not configured (503). Nothing was changed.</summary>
+public sealed class ServiceUnavailableException(string message, string code) : HeliosException(message, code);
+
 /// <summary>Valid request, but the result is no longer retained (410).</summary>
 public sealed class GoneException(string message) : HeliosException(message, "result_expired");

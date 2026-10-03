@@ -43,6 +43,8 @@ public interface IHeliosDbContext
     DbSet<PriceVersion> PriceVersions { get; }
     DbSet<UsageEvent> UsageEvents { get; }
     DbSet<Job> Jobs { get; }
+    DbSet<Payment> Payments { get; }
+    DbSet<PaymentEvent> PaymentEvents { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

@@ -33,6 +33,7 @@ public static partial class PlatformEndpoints
         MapApiKeys(app);
         MapRequests(app);
         MapBillingProfile(app);
+        MapBilling(app);
         return app;
     }
 
@@ -201,6 +202,89 @@ public static partial class PlatformEndpoints
             .Produces<ApiRequestSummary>()
             .ProducesProblem(StatusCodes.Status409Conflict);
     }
+
+    private static void MapBilling(IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/api/v1/organizations/{organizationId:guid}/billing")
+            .WithTags("Billing")
+            .RequireAuthorization();
+
+        group.MapGet("/balance", async (Guid organizationId, BillingQueryService service, CancellationToken ct) =>
+                Results.Ok(await service.GetBalanceAsync(organizationId, ct)))
+            .WithName("GetBalance")
+            .WithSummary("Settled, reserved and available Rand balances.")
+            .Produces<BalanceResponse>();
+
+        group.MapGet("/transactions", async (Guid organizationId, int? limit, BillingQueryService service, CancellationToken ct) =>
+                Results.Ok(await service.GetTransactionsAsync(organizationId, limit ?? 100, ct)))
+            .WithName("ListLedgerTransactions")
+            .Produces<IReadOnlyList<LedgerTransactionResponse>>();
+
+        group.MapGet("/usage", async (
+                Guid organizationId,
+                DateTimeOffset? from,
+                DateTimeOffset? to,
+                BillingQueryService service,
+                TimeProvider clock,
+                CancellationToken ct) =>
+            {
+                var end = to ?? clock.GetUtcNow();
+                return Results.Ok(await service.GetUsageAsync(organizationId, from ?? end.AddDays(-30), end, ct));
+            })
+            .WithName("GetUsage")
+            .WithSummary("Usage and charges per product for a period (default: last 30 days).")
+            .Produces<UsageResponse>();
+
+        group.MapGet("/payments", async (Guid organizationId, PaymentService service, CancellationToken ct) =>
+                Results.Ok(await service.ListAsync(organizationId, ct)))
+            .WithName("ListPayments")
+            .Produces<IReadOnlyList<PaymentResponse>>();
+
+        group.MapPost("/top-ups", async (
+                Guid organizationId,
+                CreateTopUpRequest request,
+                PaymentService service,
+                CancellationToken ct) =>
+            {
+                var payment = await service.CreateTopUpAsync(organizationId, request, ct);
+                return Results.Created($"/api/v1/organizations/{organizationId}/billing/payments", payment);
+            })
+            .WithName("CreateTopUp")
+            .WithSummary("Starts a gateway checkout. Credit is added only when the gateway confirms payment.")
+            .Produces<PaymentResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
+        // Gateway-to-server only. Authenticated by the gateway's signature, not by a user or key.
+        app.MapPost("/api/v1/payments/callbacks/{gateway}", async (
+                string gateway,
+                HttpRequest http,
+                PaymentService service,
+                CancellationToken ct) =>
+            {
+                if (http.ContentLength > MaxCallbackBytes)
+                {
+                    return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+                }
+
+                using var reader = new StreamReader(http.Body);
+                var body = await reader.ReadToEndAsync(ct);
+                if (body.Length > MaxCallbackBytes)
+                {
+                    return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+                }
+
+                var headers = http.Headers.ToDictionary(h => h.Key, h => h.Value.ToString(), StringComparer.OrdinalIgnoreCase);
+                var result = await service.HandleCallbackAsync(gateway, headers, body, ct);
+
+                return result == CallbackResult.Unauthenticated ? Results.Unauthorized() : Results.Ok();
+            })
+            .WithTags("Billing")
+            .WithName("PaymentCallback")
+            .AllowAnonymous()
+            .ExcludeFromDescription();
+    }
+
+    private const int MaxCallbackBytes = 64 * 1024;
 
     private static void MapBillingProfile(IEndpointRouteBuilder app)
     {

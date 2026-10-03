@@ -48,6 +48,7 @@ public sealed class HeliosExceptionHandler(
             PayloadTooLargeException => (StatusCodes.Status413PayloadTooLarge, "Payload too large"),
             InsufficientCreditException => (StatusCodes.Status402PaymentRequired, "Insufficient credit"),
             BadRequestException => (StatusCodes.Status400BadRequest, "Bad request"),
+            ServiceUnavailableException => (StatusCodes.Status503ServiceUnavailable, "Service unavailable"),
             // A malformed body (bad JSON, an enum sent as the wrong type) is the caller's
             // mistake, not a server fault — return the 400 it carries, not a 500.
             BadHttpRequestException badRequest => (badRequest.StatusCode, "Bad request"),

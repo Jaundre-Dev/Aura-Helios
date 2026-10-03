@@ -126,4 +126,14 @@ public sealed class MySqlRowLocks(HeliosDbContext db, TimeProvider clock) : IRow
 
         return rows.SingleOrDefault() is { } fresh ? TrackFresh(fresh) : null;
     }
+
+    public async Task<Payment?> LockPaymentAsync(string gateway, string gatewayReference, CancellationToken cancellationToken)
+    {
+        var rows = await db.Payments
+            .FromSqlInterpolated($"SELECT * FROM payments WHERE gateway = {gateway} AND gateway_reference = {gatewayReference} FOR UPDATE")
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        return rows.SingleOrDefault() is { } fresh ? TrackFresh(fresh) : null;
+    }
 }

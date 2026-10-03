@@ -2,7 +2,9 @@ using Helios.Application.Abstractions.Execution;
 using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Features.Execution;
 using Helios.Application.Features.Requests;
+using Helios.Application.Abstractions.Payments;
 using Helios.Infrastructure.Execution;
+using Helios.Infrastructure.Payments;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Abstractions.Storage;
 using Helios.Infrastructure.Security;
@@ -97,7 +99,42 @@ public static class InfrastructureServiceCollectionExtensions
 
         services.AddHostedService<ProductionSafetyCheck>();
 
+        AddPaymentGateway(services, configuration);
+
         return services;
+    }
+
+    /// <summary>
+    /// Registers the configured payment gateway (<c>Helios:Payments:Gateway</c>). With none
+    /// configured, top-ups answer 503 rather than pretending. Only the fake test gateway exists until
+    /// a gateway contract is signed; Production refuses it at startup.
+    /// </summary>
+    private static void AddPaymentGateway(IServiceCollection services, IConfiguration configuration)
+    {
+        var gateway = configuration["Helios:Payments:Gateway"];
+
+        if (string.Equals(gateway, FakeTestGatewayOptions.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            var section = configuration.GetSection("Helios:Payments:FakeTest");
+            var secret = section["WebhookSecret"];
+
+            if (string.IsNullOrWhiteSpace(secret) || secret.Length < 32)
+            {
+                throw new InvalidOperationException(
+                    "Helios:Payments:FakeTest:WebhookSecret must be set (32+ characters) when the fake-test gateway is configured.");
+            }
+
+            services.AddSingleton(new FakeTestGatewayOptions
+            {
+                WebhookSecret = secret,
+                MerchantId = section["MerchantId"] ?? "fake-merchant"
+            });
+            services.AddSingleton<IPaymentGateway, FakeTestPaymentGateway>();
+        }
+        else if (!string.IsNullOrWhiteSpace(gateway))
+        {
+            throw new InvalidOperationException($"Unknown payment gateway '{gateway}'. No real gateway adapter is implemented yet.");
+        }
     }
 
     /// <summary>

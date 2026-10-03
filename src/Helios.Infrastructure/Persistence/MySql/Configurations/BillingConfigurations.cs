@@ -145,6 +145,57 @@ public sealed class UsageEventConfiguration : IEntityTypeConfiguration<UsageEven
     }
 }
 
+public sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
+{
+    public void Configure(EntityTypeBuilder<Payment> builder)
+    {
+        builder.ToTable("payments");
+        builder.HasKey(p => p.Id);
+
+        builder.Property(p => p.Gateway).HasMaxLength(50).IsRequired();
+        builder.Property(p => p.GatewayReference).HasMaxLength(200);
+        builder.Property(p => p.Amount).HasPrecision(19, 6);
+        builder.Property(p => p.Currency).HasMaxLength(3).IsRequired();
+        builder.Property(p => p.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(p => p.CheckoutUrl).HasMaxLength(2000);
+
+        builder.HasIndex(p => new { p.Gateway, p.GatewayReference }).IsUnique();
+        builder.HasIndex(p => new { p.OrganizationId, p.CreatedAt });
+
+        builder.HasOne<Organization>()
+            .WithMany()
+            .HasForeignKey(p => p.OrganizationId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+public sealed class PaymentEventConfiguration : IEntityTypeConfiguration<PaymentEvent>
+{
+    public void Configure(EntityTypeBuilder<PaymentEvent> builder)
+    {
+        builder.ToTable("payment_events");
+        builder.HasKey(e => e.Id);
+
+        builder.Property(e => e.Gateway).HasMaxLength(50).IsRequired();
+        builder.Property(e => e.EventId).HasMaxLength(200).IsRequired();
+        builder.Property(e => e.Type).HasConversion<string>().HasMaxLength(30);
+        builder.Property(e => e.Amount).HasPrecision(19, 6);
+        builder.Property(e => e.Currency).HasMaxLength(3).IsRequired();
+        builder.Property(e => e.Outcome).HasConversion<string>().HasMaxLength(20);
+        builder.Property(e => e.Reason).HasMaxLength(100);
+        builder.Property(e => e.PayloadHash).HasMaxLength(64).IsRequired();
+
+        // Replay protection: one row per gateway event, ever.
+        builder.HasIndex(e => new { e.Gateway, e.EventId }).IsUnique();
+        builder.HasIndex(e => e.PaymentId);
+
+        builder.HasOne<Payment>()
+            .WithMany()
+            .HasForeignKey(e => e.PaymentId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public sealed class JobConfiguration : IEntityTypeConfiguration<Job>
 {
     public void Configure(EntityTypeBuilder<Job> builder)

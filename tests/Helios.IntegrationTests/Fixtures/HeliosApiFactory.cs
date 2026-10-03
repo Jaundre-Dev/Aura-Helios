@@ -48,6 +48,8 @@ public sealed class TestScopeIdentity
 public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string SigningKey = "integration-tests-signing-key-not-a-real-secret";
+    public const string FakeGatewaySecret = "integration-tests-fake-gateway-secret-not-real";
+    public const string FakeGatewayMerchant = "test-merchant";
 
     private readonly DisposableTestDatabase _database = DisposableTestDatabase.FromEnvironment();
 
@@ -78,6 +80,11 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("Helios:Execution:RetryBaseDelaySeconds", "0");
         builder.UseSetting("Helios:Execution:ReconcileDelaySeconds", "0");
         builder.UseSetting("Helios:Execution:MaxReconcileAttempts", "3");
+
+        // The fake gateway, with a test-only signing secret. Production refuses this configuration.
+        builder.UseSetting("Helios:Payments:Gateway", "fake-test");
+        builder.UseSetting("Helios:Payments:FakeTest:WebhookSecret", FakeGatewaySecret);
+        builder.UseSetting("Helios:Payments:FakeTest:MerchantId", FakeGatewayMerchant);
 
         builder.ConfigureServices(services =>
         {
