@@ -208,6 +208,32 @@ public static partial class PlatformEndpoints
             .WithSummary("Cancels a request still waiting in the queue and releases its reservation.")
             .Produces<ApiRequestSummary>()
             .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapPost("/{id:guid}/review", async (Guid id, SubmitReviewRequest request, ReviewService service, CancellationToken ct) =>
+                (await service.SubmitAsync(id, request, ct) is { } review) ? Results.Ok(review) : Results.NotFound())
+            .WithName("ReviewRequest")
+            .WithSummary("Approves, corrects or rejects a result. The original is kept; every decision is recorded with its actor.")
+            .WithValidation<SubmitReviewRequest>()
+            .Produces<RequestReviewResponse>()
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status410Gone);
+
+        group.MapGet("/{id:guid}/review", async (Guid id, ReviewService service, CancellationToken ct) =>
+                (await service.GetAsync(id, ct) is { } review) ? Results.Ok(review) : Results.NotFound())
+            .WithName("GetRequestReview")
+            .WithSummary("Review state, corrections in force and the decision history.")
+            .Produces<RequestReviewResponse>();
+
+        group.MapGet("/{id:guid}/export", async (Guid id, string? format, ReviewService service, CancellationToken ct) =>
+                (await service.ExportAsync(id, (format ?? "json").ToLowerInvariant(), ct) is { } export)
+                    ? Results.File(export.Content, export.MediaType, export.FileName)
+                    : Results.NotFound())
+            .WithName("ExportRequestResult")
+            .WithSummary("The result with corrections applied, as ?format=json (default) or csv. Requires ViewResults.")
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status410Gone);
     }
 
     private static void MapBilling(IEndpointRouteBuilder app)

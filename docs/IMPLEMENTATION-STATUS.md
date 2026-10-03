@@ -19,7 +19,7 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | P0 Safe foundation | Backend complete; gate **not fully passed** | Backend build, unit, architecture and disposable-database integration tests pass (slice P0.1 below). Outstanding: frontend lockfile + production build (no npm on this machine), Docker image builds (no Docker on this machine) |
 | P1 Portal/catalogue/keys | Backend complete; gate **not passed** | API side of the gate passes (slice P1.1 below). Outstanding: functional portal pages (sign-in, company, team, catalogue, keys) — blocked on Node.js/npm |
 | P2 Jobs/usage/billing | **Gate items pass (API)**; scope gaps listed | All six P2 gate conditions are covered by passing integration tests (slices P2.1–P2.3). Platform administration API with TOTP step-up added (P2.4). Not done: invoices (blocked on accounting confirmation of tax-invoice rules), a real payment gateway (blocked on contract), portal and admin views (blocked on Node.js) |
-| P3 Document products | In progress (gate not passed) | Safe uploads (P3.1); ocr.general and documents.invoice v1 (P3.2); bank statement, payslip, proof of address and classification v1 (P3.3) — native PDFs, sandbox only. Gate needs an owner-approved representative dataset, written targets and an OCR engine decision |
+| P3 Document products | In progress (gate not passed) | Safe uploads (P3.1); ocr.general and documents.invoice v1 (P3.2); bank statement, payslip, proof of address and classification v1 (P3.3) — native PDFs, sandbox only; review corrections and export (P3.4). Gate needs an owner-approved representative dataset, written targets and an OCR engine decision |
 | P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
 | P6 Expansion | Backlog | Customer-led catalogue additions |
@@ -351,6 +351,41 @@ Existing tests were updated where their premise changed: the catalogue honesty t
 - `documents.sa-id` needs an OCR engine, because ID documents are images.
 - The P3 gate needs an owner-approved representative dataset with written accuracy, review-rate and latency targets for every product. All results so far are on synthetic PDFs.
 - Review corrections and export are next.
+
+## Slice P3.4 — review corrections and export (2026-10-03)
+
+### Behaviour now in place
+
+- **Review** `POST /api/v1/requests/{id}/review` takes one of three decisions:
+  - `Approve` takes no corrections.
+  - `Correct` needs at least one correction.
+  - `Reject` needs a reason.
+
+  Corrections are addressed by path: `fields.<name>` (also fills a field that was not found), or `<list>[i].<property>` for a plain value in a list item (a statement transaction, an invoice line). Paths must exist in the result. Evidence and markers cannot be edited, and values are text, numbers, booleans, null or short text lists. The limit is 100 per decision.
+
+  Decisions are **append-only** (`review_decisions`): the stored result is never modified; each decision keeps its actor (user or API key), reason and time; the corrections in force are all `Correct` decisions applied in order. State: `not_required`, `pending`, `approved`, `corrected` or `rejected`. Audit rows name the corrected paths, never the values.
+- **Permissions**: a new `ReviewResults` permission is held by Owner, Admin and Operator. Finance and Developer cannot review. Reading reviews and exporting need `ViewResults`. API keys may review and export only their own environment and scoped products. Other workspaces get 404.
+- **Export** `GET /api/v1/requests/{id}/export?format=json|csv`:
+  - JSON carries the corrected result (with `corrected: true` on changed values and the original evidence kept), the untouched original and the review state.
+  - CSV has one row per value: section, name, original, correction, final, page, source. Cells a spreadsheet would run as formulas get an apostrophe; negative amounts stay numbers.
+  - Each export is audited.
+- **Retention**: when a result expires, the sweep also removes corrected values (`corrections_json` → null, `purged_at` set). The decision record is kept for audit, and exports then return 410.
+
+### Bug found during this slice
+
+Export showed every uncorrected value as "corrected to blank": a dictionary lookup on a struct-valued map returned an undefined `JsonElement` instead of null. A unit test exposed it, and it is fixed.
+
+### Schema
+
+Forward migration `20261003142237_ReviewDecisions`: `review_decisions` (FK to `api_requests`, workspace-filtered). Idempotent deployment script regenerated.
+
+### Validation (2026-10-03)
+
+| Command | Result |
+| --- | --- |
+| `dotnet build Helios.sln` | Succeeded, 0 warnings, 0 errors |
+| `dotnet test Helios.sln --no-build` | UnitTests 160, ArchitectureTests 4, IntegrationTests 213 — all passed |
+| Mutation: key environment/scope check on review removed | `Only_reviewing_roles_review_and_only_result_readers_export` failed as intended; restored |
 
 ## Required update format for Claude
 

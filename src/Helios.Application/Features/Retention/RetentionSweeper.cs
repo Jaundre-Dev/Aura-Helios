@@ -32,7 +32,12 @@ public sealed class RetentionSweeper(ITenantScopeFactory scopes, TimeProvider cl
                 .Where(r => r.ResultJson != null && r.ResultExpiresAt <= now)
                 .Select(r => r.WorkspaceId);
 
-            workspaces = await withUploads.Union(withResults).Distinct().Take(maxWorkspaces).ToListAsync(ct);
+            var withCorrections = db.ReviewDecisions
+                .Where(d => d.CorrectionsJson != null &&
+                            db.ApiRequests.Any(r => r.Id == d.ApiRequestId && r.ResultExpiresAt <= now))
+                .Select(d => d.WorkspaceId);
+
+            workspaces = await withUploads.Union(withResults).Union(withCorrections).Distinct().Take(maxWorkspaces).ToListAsync(ct);
         }
 
         var purged = 0;
@@ -71,6 +76,16 @@ public sealed class RetentionSweeper(ITenantScopeFactory scopes, TimeProvider cl
             .Take(500)
             .ExecuteUpdateAsync(s => s.SetProperty(r => r.ResultJson, (string?)null), ct);
 
-        return uploads.Count + results;
+        // Corrected values are copies of document data: they go when the result goes. The decision
+        // itself (who, what, when, why) is kept for audit.
+        var corrections = await db.ReviewDecisions
+            .Where(d => d.CorrectionsJson != null &&
+                        db.ApiRequests.Any(r => r.Id == d.ApiRequestId && r.ResultExpiresAt <= now))
+            .Take(500)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(d => d.CorrectionsJson, (string?)null)
+                .SetProperty(d => d.PurgedAt, now), ct);
+
+        return uploads.Count + results + corrections;
     }
 }

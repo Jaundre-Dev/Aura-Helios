@@ -2696,5 +2696,76 @@ DELIMITER ;
 CALL MigrationsScript();
 DROP PROCEDURE MigrationsScript;
 
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003142237_ReviewDecisions') THEN
+
+    CREATE TABLE `review_decisions` (
+        `id` binary(16) NOT NULL,
+        `api_request_id` binary(16) NOT NULL,
+        `organization_id` binary(16) NOT NULL,
+        `workspace_id` binary(16) NOT NULL,
+        `decision` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `corrections_json` json NULL,
+        `reason` varchar(500) CHARACTER SET utf8mb4 NULL,
+        `actor_user_id` binary(16) NULL,
+        `api_key_id` binary(16) NULL,
+        `created_at` datetime(6) NOT NULL,
+        `purged_at` datetime(6) NULL,
+        CONSTRAINT `pk_review_decisions` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_review_decisions_api_requests_api_request_id` FOREIGN KEY (`api_request_id`) REFERENCES `api_requests` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003142237_ReviewDecisions') THEN
+
+    CREATE INDEX `ix_review_decisions_api_request_id_created_at` ON `review_decisions` (`api_request_id`, `created_at`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003142237_ReviewDecisions') THEN
+
+    CREATE INDEX `ix_review_decisions_workspace_id` ON `review_decisions` (`workspace_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003142237_ReviewDecisions') THEN
+
+    INSERT INTO `__helios_migrations_history` (`MigrationId`, `ProductVersion`)
+    VALUES ('20261003142237_ReviewDecisions', '9.0.19');
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
 COMMIT;
 

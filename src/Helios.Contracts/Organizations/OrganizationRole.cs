@@ -54,5 +54,8 @@ public enum OrganizationPermission
     ManageBilling,
 
     /// <summary>Read the company audit trail.</summary>
-    ViewAudit
+    ViewAudit,
+
+    /// <summary>Approve, correct or reject document results. Originals are always kept.</summary>
+    ReviewResults
 }

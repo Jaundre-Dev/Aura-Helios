@@ -55,6 +55,7 @@ public class HeliosDbContext(
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
     public DbSet<Upload> Uploads => Set<Upload>();
     public DbSet<PlatformStaffMember> PlatformStaff => Set<PlatformStaffMember>();
+    public DbSet<ReviewDecision> ReviewDecisions => Set<ReviewDecision>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -141,5 +142,9 @@ public class HeliosDbContext(
 
         modelBuilder.Entity<Upload>()
             .HasQueryFilter(u => _workspaceContext.IsSystem || u.WorkspaceId == _workspaceContext.WorkspaceId);
+
+        // Review decisions carry corrected values; like results, they stay in their workspace.
+        modelBuilder.Entity<ReviewDecision>()
+            .HasQueryFilter(d => _workspaceContext.IsSystem || d.WorkspaceId == _workspaceContext.WorkspaceId);
     }
 }

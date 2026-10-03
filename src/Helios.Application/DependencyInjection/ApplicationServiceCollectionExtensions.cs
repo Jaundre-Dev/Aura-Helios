@@ -34,6 +34,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ApiKeyService>();
         services.AddScoped<CallerResolver>();
         services.AddScoped<ProductRequestService>();
+        services.AddScoped<ReviewService>();
         services.AddScoped<UploadService>();
         services.AddScoped<IUploadAccess, UploadAccess>();
         services.AddScoped<BillingProfileService>();

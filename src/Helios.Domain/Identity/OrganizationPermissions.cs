@@ -24,6 +24,7 @@ public static class OrganizationPermissions
                 OrganizationPermission.ManageEntitlements,
                 OrganizationPermission.ExecuteProducts,
                 OrganizationPermission.ViewResults,
+                OrganizationPermission.ReviewResults,
                 OrganizationPermission.ViewRequestDiagnostics,
                 OrganizationPermission.ViewBilling,
                 OrganizationPermission.ViewAudit,
@@ -49,6 +50,7 @@ public static class OrganizationPermissions
                 OrganizationPermission.ViewOrganization,
                 OrganizationPermission.ExecuteProducts,
                 OrganizationPermission.ViewResults,
+                OrganizationPermission.ReviewResults,
             ],
 
             [OrganizationRole.Auditor] =
