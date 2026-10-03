@@ -5,6 +5,7 @@ using Helios.Application.Abstractions.Security;
 using Helios.Application.Features.Billing;
 using Helios.Application.Features.Products;
 using Helios.Application.Features.Requests;
+using Helios.Application.Features.Webhooks;
 using Helios.Contracts.Requests;
 using Helios.Domain.Billing;
 using Helios.Domain.Execution;
@@ -38,6 +39,7 @@ public sealed class JobRunner(
     LedgerService ledger,
     ExecutionPolicy policy,
     RequestRetentionPolicy retention,
+    WebhookOutbox outbox,
     TimeProvider clock)
 {
     /// <summary>A job claim that another worker superseded. Nothing was committed.</summary>
@@ -182,6 +184,7 @@ public sealed class JobRunner(
             });
 
             Finish(job, JobStatus.Succeeded, now);
+            await outbox.EnqueueAsync(request, token);
             return true;
         }, ct);
 
@@ -213,6 +216,7 @@ public sealed class JobRunner(
                 job.Status = JobStatus.NeedsReview;
                 request.Status = ApiRequestStatus.NeedsReview;
                 request.ErrorCode = "outcome_unknown";
+                await outbox.EnqueueAsync(request, token);
             }
             else
             {
@@ -276,6 +280,7 @@ public sealed class JobRunner(
 
             job.LastError = Truncate(error);
             Finish(job, JobStatus.Failed, now);
+            await outbox.EnqueueAsync(request, token);
             return true;
         }, ct);
 

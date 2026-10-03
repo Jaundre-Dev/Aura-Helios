@@ -8,6 +8,7 @@ using Helios.Application.Features.Products;
 using Helios.Application.Features.Products.Identity;
 using Helios.Application.Features.Projects;
 using Helios.Application.Features.Requests;
+using Helios.Application.Features.Webhooks;
 using Helios.Application.Features.Workspaces;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -36,7 +37,9 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<PaymentService>();
         services.AddScoped<BillingQueryService>();
         services.AddScoped<JobRunner>();
-        services.AddSingleton<JobWorker>();
+
+        services.AddScoped<WebhookOutbox>();
+        services.AddScoped<WebhookService>();
 
         // First-party product executors. Each callable catalogue product needs exactly one here.
         services.AddSingleton<IProductExecutor, SaIdValidateExecutor>();

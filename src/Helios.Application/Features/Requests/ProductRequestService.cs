@@ -6,6 +6,7 @@ using Helios.Application.Abstractions.Execution;
 using Helios.Application.Features.Billing;
 using Helios.Application.Features.Catalogue;
 using Helios.Application.Features.Execution;
+using Helios.Application.Features.Webhooks;
 using Helios.Application.Features.Identity;
 using Helios.Application.Features.Products;
 using Helios.Contracts.Catalogue;
@@ -51,6 +52,7 @@ public sealed class ProductRequestService(
     LedgerService ledger,
     JobRunner runner,
     ExecutionPolicy policy,
+    WebhookOutbox outbox,
     TimeProvider clock)
 {
     public const int MaxIdempotencyKeyLength = 255;
@@ -289,6 +291,7 @@ public sealed class ProductRequestService(
             job.CompletedAt = now;
             job.InputEnvelope = null;
             job.InputKeyId = null;
+            await outbox.EnqueueAsync(request, token);
             return true;
         }, ct);
 

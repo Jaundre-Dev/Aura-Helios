@@ -4,7 +4,10 @@ using Helios.Application.Features.Execution;
 using Helios.Application.Features.Requests;
 using Helios.Application.Abstractions.Payments;
 using Helios.Infrastructure.Execution;
+using Helios.Application.Abstractions.Webhooks;
+using Helios.Application.Features.Webhooks;
 using Helios.Infrastructure.Payments;
+using Helios.Infrastructure.Webhooks;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Abstractions.Storage;
 using Helios.Infrastructure.Security;
@@ -100,8 +103,32 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddHostedService<ProductionSafetyCheck>();
 
         AddPaymentGateway(services, configuration);
+        AddWebhooks(services, configuration);
 
         return services;
+    }
+
+    /// <summary>
+    /// Outbound webhooks: SSRF policy, connect-time address guard and delivery queue.
+    /// <c>Helios:Webhooks:AllowPrivateNetworks</c> is for local development and tests; Production refuses it.
+    /// </summary>
+    private static void AddWebhooks(IServiceCollection services, IConfiguration configuration)
+    {
+        var section = configuration.GetSection("Helios:Webhooks");
+        var allowPrivate = section.GetValue("AllowPrivateNetworks", false);
+        var defaults = new WebhookPolicy();
+
+        services.AddSingleton<IOutboundUrlPolicy>(new OutboundUrlPolicy(allowPrivate));
+        services.AddSingleton(new WebhookPolicy
+        {
+            MaxAttempts = section.GetValue("MaxAttempts", defaults.MaxAttempts),
+            BaseDelay = TimeSpan.FromSeconds(section.GetValue("BaseDelaySeconds", defaults.BaseDelay.TotalSeconds)),
+        });
+
+        services.AddHttpClient(GuardedWebhookSender.ClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => GuardedWebhookSender.CreateGuardedHandler(allowPrivate));
+        services.AddSingleton<IWebhookSender, GuardedWebhookSender>();
+        services.AddScoped<IWebhookQueue, MySqlWebhookQueue>();
     }
 
     /// <summary>

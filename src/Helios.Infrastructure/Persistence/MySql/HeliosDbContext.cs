@@ -7,6 +7,7 @@ using Helios.Domain.Execution;
 using Helios.Domain.Identity;
 using Helios.Domain.Platform;
 using Helios.Domain.Requests;
+using Helios.Domain.Webhooks;
 using Helios.Infrastructure.Persistence.MySql.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -49,6 +50,8 @@ public class HeliosDbContext(
     public DbSet<Job> Jobs => Set<Job>();
     public DbSet<Payment> Payments => Set<Payment>();
     public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
+    public DbSet<WebhookEndpoint> WebhookEndpoints => Set<WebhookEndpoint>();
+    public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -126,5 +129,11 @@ public class HeliosDbContext(
 
         modelBuilder.Entity<UsageEvent>()
             .HasQueryFilter(u => _workspaceContext.IsSystem || u.WorkspaceId == _workspaceContext.WorkspaceId);
+
+        modelBuilder.Entity<WebhookEndpoint>()
+            .HasQueryFilter(e => _workspaceContext.IsSystem || e.WorkspaceId == _workspaceContext.WorkspaceId);
+
+        modelBuilder.Entity<WebhookDelivery>()
+            .HasQueryFilter(d => _workspaceContext.IsSystem || d.WorkspaceId == _workspaceContext.WorkspaceId);
     }
 }

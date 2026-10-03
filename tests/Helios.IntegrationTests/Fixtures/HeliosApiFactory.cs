@@ -4,6 +4,7 @@ using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Features.Billing;
 using Helios.Application.Features.Execution;
+using Helios.Application.Features.Webhooks;
 using Helios.Application.Features.Products;
 using Helios.Contracts.Catalogue;
 using Helios.Domain.Catalogue;
@@ -55,6 +56,23 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
 
     public string DatabaseName => _database.Name;
 
+    /// <summary>Records every webhook delivery; answers 200 unless a URL is told to fail.</summary>
+    public RecordingWebhookReceiver WebhookReceiver { get; } = new();
+
+    /// <summary>Delivers due webhooks until none are left. Returns how many were attempted.</summary>
+    public async Task<int> DrainWebhooksAsync(int max = 100)
+    {
+        var dispatcher = Services.GetRequiredService<WebhookDispatcher>();
+        var attempted = 0;
+
+        while (attempted < max && await dispatcher.DeliverNextAsync(CancellationToken.None))
+        {
+            attempted++;
+        }
+
+        return attempted;
+    }
+
     /// <summary>The disposable database's connection string, for hosts other than the API (the worker).</summary>
     public string DatabaseConnectionString => _database.ConnectionString;
 
@@ -81,6 +99,9 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("Helios:Execution:ReconcileDelaySeconds", "0");
         builder.UseSetting("Helios:Execution:MaxReconcileAttempts", "3");
 
+        builder.UseSetting("Helios:Webhooks:MaxAttempts", "3");
+        builder.UseSetting("Helios:Webhooks:BaseDelaySeconds", "0");
+
         // The fake gateway, with a test-only signing secret. Production refuses this configuration.
         builder.UseSetting("Helios:Payments:Gateway", "fake-test");
         builder.UseSetting("Helios:Payments:FakeTest:WebhookSecret", FakeGatewaySecret);
@@ -92,6 +113,13 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
             services.AddSingleton<IProductExecutor, TestMeteredExecutor>();
             services.AddSingleton<IProductExecutor, TestProviderExecutor>();
             services.AddSingleton<ITenantScopeFactory, TestTenantScopes>();
+            services.AddSingleton<JobWorker>();
+            services.AddSingleton<WebhookDispatcher>();
+
+            // Webhook deliveries go to an in-memory receiver instead of the network. The real,
+            // connect-time SSRF guard is exercised directly in WebhookTests.
+            services.AddHttpClient(Infrastructure.Webhooks.GuardedWebhookSender.ClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => WebhookReceiver);
 
             services.AddScoped<TestScopeIdentity>();
             services.RemoveAll<IWorkspaceContext>();

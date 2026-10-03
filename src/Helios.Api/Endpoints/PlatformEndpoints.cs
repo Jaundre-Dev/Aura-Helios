@@ -7,10 +7,12 @@ using Helios.Application.Features.ApiKeys;
 using Helios.Application.Features.Billing;
 using Helios.Application.Features.Catalogue;
 using Helios.Application.Features.Requests;
+using Helios.Application.Features.Webhooks;
 using Helios.Contracts.ApiKeys;
 using Helios.Contracts.Billing;
 using Helios.Contracts.Catalogue;
 using Helios.Contracts.Requests;
+using Helios.Contracts.Webhooks;
 
 namespace Helios.Api.Endpoints;
 
@@ -34,6 +36,7 @@ public static partial class PlatformEndpoints
         MapRequests(app);
         MapBillingProfile(app);
         MapBilling(app);
+        MapWebhooks(app);
         return app;
     }
 
@@ -285,6 +288,42 @@ public static partial class PlatformEndpoints
     }
 
     private const int MaxCallbackBytes = 64 * 1024;
+
+    private static void MapWebhooks(IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/api/v1/webhooks")
+            .WithTags("Webhooks")
+            .RequireAuthorization();
+
+        group.MapGet("/", async (WebhookService service, CancellationToken ct) =>
+                Results.Ok(await service.ListAsync(ct)))
+            .WithName("ListWebhooks")
+            .Produces<IReadOnlyList<WebhookEndpointResponse>>();
+
+        group.MapPost("/", async (CreateWebhookRequest request, WebhookService service, CancellationToken ct) =>
+            {
+                var created = await service.CreateAsync(request, ct);
+                return Results.Created($"/api/v1/webhooks/{created.Endpoint.Id}", created);
+            })
+            .WithName("CreateWebhook")
+            .WithSummary("Registers an HTTPS endpoint. The signing secret is in this response only.")
+            .Produces<CreatedWebhookResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
+        group.MapDelete("/{id:guid}", async (Guid id, WebhookService service, CancellationToken ct) =>
+            {
+                await service.DeactivateAsync(id, ct);
+                return Results.NoContent();
+            })
+            .WithName("DeactivateWebhook")
+            .Produces(StatusCodes.Status204NoContent);
+
+        group.MapGet("/{id:guid}/deliveries", async (Guid id, WebhookService service, CancellationToken ct) =>
+                Results.Ok(await service.ListDeliveriesAsync(id, ct)))
+            .WithName("ListWebhookDeliveries")
+            .WithSummary("Recent deliveries with status, attempts and last response, including dead letters.")
+            .Produces<IReadOnlyList<WebhookDeliveryResponse>>();
+    }
 
     private static void MapBillingProfile(IEndpointRouteBuilder app)
     {

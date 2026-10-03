@@ -2177,5 +2177,124 @@ DELIMITER ;
 CALL MigrationsScript();
 DROP PROCEDURE MigrationsScript;
 
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003104538_Webhooks') THEN
+
+    CREATE TABLE `webhook_endpoints` (
+        `id` binary(16) NOT NULL,
+        `organization_id` binary(16) NOT NULL,
+        `workspace_id` binary(16) NOT NULL,
+        `url` varchar(2000) CHARACTER SET utf8mb4 NOT NULL,
+        `description` varchar(500) CHARACTER SET utf8mb4 NULL,
+        `events` varchar(500) CHARACTER SET utf8mb4 NOT NULL,
+        `secret_envelope` varbinary(256) NOT NULL,
+        `secret_key_id` varchar(64) CHARACTER SET utf8mb4 NOT NULL,
+        `is_active` tinyint(1) NOT NULL,
+        `created_at` datetime(6) NOT NULL,
+        `created_by` binary(16) NULL,
+        `updated_at` datetime(6) NULL,
+        `updated_by` binary(16) NULL,
+        CONSTRAINT `pk_webhook_endpoints` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_webhook_endpoints_workspaces_workspace_id` FOREIGN KEY (`workspace_id`) REFERENCES `workspaces` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003104538_Webhooks') THEN
+
+    CREATE TABLE `webhook_deliveries` (
+        `id` binary(16) NOT NULL,
+        `endpoint_id` binary(16) NOT NULL,
+        `organization_id` binary(16) NOT NULL,
+        `workspace_id` binary(16) NOT NULL,
+        `event_id` varchar(100) CHARACTER SET utf8mb4 NOT NULL,
+        `event_type` varchar(50) CHARACTER SET utf8mb4 NOT NULL,
+        `payload_json` json NOT NULL,
+        `status` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `attempts` int NOT NULL,
+        `next_attempt_at` datetime(6) NOT NULL,
+        `lease_expires_at` datetime(6) NULL,
+        `last_status_code` int NULL,
+        `last_error` varchar(1000) CHARACTER SET utf8mb4 NULL,
+        `created_at` datetime(6) NOT NULL,
+        `delivered_at` datetime(6) NULL,
+        CONSTRAINT `pk_webhook_deliveries` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_webhook_deliveries_webhook_endpoints_endpoint_id` FOREIGN KEY (`endpoint_id`) REFERENCES `webhook_endpoints` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003104538_Webhooks') THEN
+
+    CREATE UNIQUE INDEX `ix_webhook_deliveries_endpoint_id_event_id` ON `webhook_deliveries` (`endpoint_id`, `event_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003104538_Webhooks') THEN
+
+    CREATE INDEX `ix_webhook_deliveries_status_next_attempt_at` ON `webhook_deliveries` (`status`, `next_attempt_at`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003104538_Webhooks') THEN
+
+    CREATE INDEX `ix_webhook_endpoints_workspace_id_is_active` ON `webhook_endpoints` (`workspace_id`, `is_active`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003104538_Webhooks') THEN
+
+    INSERT INTO `__helios_migrations_history` (`MigrationId`, `ProductVersion`)
+    VALUES ('20261003104538_Webhooks', '9.0.19');
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
 COMMIT;
 

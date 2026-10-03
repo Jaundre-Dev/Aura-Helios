@@ -18,7 +18,7 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | --- | --- | --- |
 | P0 Safe foundation | Backend complete; gate **not fully passed** | Backend build, unit, architecture and disposable-database integration tests pass (slice P0.1 below). Outstanding: frontend lockfile + production build (no npm on this machine), Docker image builds (no Docker on this machine) |
 | P1 Portal/catalogue/keys | Backend complete; gate **not passed** | API side of the gate passes (slice P1.1 below). Outstanding: functional portal pages (sign-in, company, team, catalogue, keys) — blocked on Node.js/npm |
-| P2 Jobs/usage/billing | In progress | Ledger, reservations, prices, durable jobs (P2.1); payments with verified callbacks and finance views (P2.2). Outstanding: customer webhooks; invoices blocked on accounting rules; real gateway blocked on contract |
+| P2 Jobs/usage/billing | **Gate items pass (API)**; scope gaps listed | All six P2 gate conditions are covered by passing integration tests (slices P2.1–P2.3). Not done: invoices (blocked on accounting confirmation of tax-invoice rules), a real payment gateway (blocked on contract), portal views (blocked on Node.js), platform admin for prices/adjustments |
 | P3 Document products | Not started | Evaluated OCR and extraction through API and UI |
 | P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
@@ -178,6 +178,45 @@ Forward migration `Payments`: `payments` (unique gateway + reference), `payment_
 ### Remaining
 
 Real gateway adapter (contract, merchant credentials, settlement reconciliation); refund/chargeback policy; invoices (tax-invoice vs receipt rules need accounting confirmation); customer webhooks (next slice).
+
+## Slice P2.3 — signed customer webhooks (2026-10-03)
+
+### Behaviour now in place
+
+- **Endpoints** `GET/POST /api/v1/webhooks`, `DELETE /api/v1/webhooks/{id}`, `GET /api/v1/webhooks/{id}/deliveries` (portal users with `ManageApiKeys`; API keys and Finance are refused). Up to 10 active per workspace. The `whsec_…` signing secret is shown once and stored sealed (AES-GCM, keyring).
+- **Events**: `request.succeeded`, `request.failed`, `request.needs_review`, `request.cancelled`.
+- **Transactional outbox**: deliveries are written in the same transaction as the request's terminal state (job completion, failure, review hand-off, cancellation), with a deterministic event id unique per endpoint, so an event is never lost, invented or duplicated by a retry.
+- **Payload** is redacted: request id, product/version, environment, status, error code, usage, billing and a result URL — never the result itself or any input.
+- **Delivery** by the worker: leased (`SKIP LOCKED`), signed `Helios-Signature: t={unix},v1={HMAC-SHA256("{t}.{body}")}` plus `Helios-Event-Id`/`Helios-Event-Type`; 2xx = delivered; otherwise exponential backoff (×4 from 30 s, capped at 6 h) up to 8 attempts, then dead-lettered (`Failed`) and visible in the delivery list. Delivery is at-least-once; receivers deduplicate on the event id. Inactive endpoints dead-letter pending deliveries.
+- **SSRF protection**: registration requires https, no credentials and no internal host/IP literal; at connection time the real handler resolves the name and refuses loopback, private, CGNAT, link-local (including 169.254.169.254 metadata), multicast/reserved, IPv6 unique-local/link-local and IPv4-mapped forms — so DNS rebinding after registration is still blocked. No redirects, no proxy, 5 s connect / 10 s total timeout. `Helios:Webhooks:AllowPrivateNetworks` exists for local development only and Production refuses it.
+
+### Schema
+
+Forward migration `Webhooks`: `webhook_endpoints`, `webhook_deliveries` (unique endpoint + event id). Idempotent deployment script regenerated (eight migrations).
+
+### Validation (2026-10-03)
+
+| Command | Result |
+| --- | --- |
+| `dotnet build Helios.sln` | Succeeded, 0 warnings, 0 errors |
+| `dotnet test Helios.sln --no-build` | UnitTests 81, ArchitectureTests 4, IntegrationTests 153 — all passed |
+| Mutation: address classifier always "allowed" | 7 `WebhookTests` failed (IP-literal registrations and all connect-time refusals); restored |
+
+`WebhookTests` cover signed delivery verified with the customer's secret and no result or input in the body; unsubscribed events not sent; 3 failed attempts then dead letter (test host max = 3); deactivation stops delivery; cross-company list/deliveries/delete are empty or 404; Finance and API keys refused; nine unsafe URLs refused at registration; the production handler refuses to connect to 127.0.0.1, `localhost` and 169.254.169.254. Delivery tests use an in-memory receiver in place of the network.
+
+## P2 gate assessment (2026-10-03)
+
+| Gate condition (plan section 14) | Evidence |
+| --- | --- |
+| Concurrent spend cannot exceed available credit | `Concurrent_spend_never_exceeds_available_credit` (30 × R1 vs R10 → 10 succeed, 20 × 402, balance 0) |
+| Duplicate submissions never double-charge | `Concurrent_duplicate_submissions_charge_once`, `Concurrent_requests_with_one_idempotency_key_record_once` |
+| Duplicate callbacks never double-credit | `A_replayed_callback_credits_once`, `Concurrent_deliveries_credit_once` |
+| Restart recovery cannot duplicate settlement | `A_stale_worker_cannot_commit…`, `A_crash_mid_call…`, `Settlement_and_release_are_each_applied_at_most_once` |
+| Unknown vendor completion reconciles | `An_unknown_provider_outcome_reconciles…`, `A_provider_confirming_non_completion…`, `A_permanently_unknown_outcome_goes_to_review…` |
+| Failed internal processing releases credit | `Failed_internal_processing_releases_the_reservation` |
+| Status polling is free | `Status_polling_is_free` |
+
+These are proven against MySQL with test-only products and the fake gateway. They are **not** evidence of a live paid service: no real product is priced, no real gateway is integrated, and no portal exists. Outstanding P2 scope: invoices (needs the owner's accountant to confirm receipt versus tax-invoice rules and credit terms), a real gateway adapter (contract), platform administration for prices and credit adjustments, lease renewal for long jobs, and a retention job purging expired results and old deliveries.
 
 ## Required update format for Claude
 

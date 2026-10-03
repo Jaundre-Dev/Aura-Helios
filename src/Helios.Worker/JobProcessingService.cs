@@ -1,6 +1,7 @@
 using Helios.Application.Abstractions.Execution;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Features.Execution;
+using Helios.Application.Features.Webhooks;
 using Microsoft.Extensions.Options;
 
 namespace Helios.Worker;
@@ -23,6 +24,7 @@ public sealed class WorkerOptions
 /// </summary>
 public sealed class JobProcessingService(
     JobWorker worker,
+    WebhookDispatcher webhooks,
     IOptions<WorkerOptions> options,
     ILogger<JobProcessingService> logger) : BackgroundService
 {
@@ -43,7 +45,10 @@ public sealed class JobProcessingService(
         {
             try
             {
-                if (!await worker.ProcessNextAsync(workerId, stoppingToken))
+                var worked = await worker.ProcessNextAsync(workerId, stoppingToken);
+                worked |= await webhooks.DeliverNextAsync(stoppingToken);
+
+                if (!worked)
                 {
                     await Task.Delay(idle, stoppingToken);
                 }
