@@ -2767,5 +2767,135 @@ DELIMITER ;
 CALL MigrationsScript();
 DROP PROCEDURE MigrationsScript;
 
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003145412_AccountSecurity') THEN
+
+    CREATE TABLE `account_tokens` (
+        `id` binary(16) NOT NULL,
+        `user_id` binary(16) NOT NULL,
+        `purpose` varchar(30) CHARACTER SET utf8mb4 NOT NULL,
+        `token_hash` varchar(64) CHARACTER SET utf8mb4 NOT NULL,
+        `created_at` datetime(6) NOT NULL,
+        `expires_at` datetime(6) NOT NULL,
+        `used_at` datetime(6) NULL,
+        CONSTRAINT `pk_account_tokens` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_account_tokens_users_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003145412_AccountSecurity') THEN
+
+    CREATE TABLE `recovery_codes` (
+        `id` binary(16) NOT NULL,
+        `user_id` binary(16) NOT NULL,
+        `scope` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `code_hash` varchar(64) CHARACTER SET utf8mb4 NOT NULL,
+        `created_at` datetime(6) NOT NULL,
+        `used_at` datetime(6) NULL,
+        CONSTRAINT `pk_recovery_codes` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_recovery_codes_users_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003145412_AccountSecurity') THEN
+
+    CREATE TABLE `user_authenticators` (
+        `id` binary(16) NOT NULL,
+        `user_id` binary(16) NOT NULL,
+        `secret_envelope` varbinary(256) NOT NULL,
+        `key_id` varchar(64) CHARACTER SET utf8mb4 NOT NULL,
+        `created_at` datetime(6) NOT NULL,
+        `confirmed_at` datetime(6) NULL,
+        `last_step` bigint NULL,
+        `failed_code_count` int NOT NULL,
+        `code_locked_until` datetime(6) NULL,
+        CONSTRAINT `pk_user_authenticators` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_user_authenticators_users_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003145412_AccountSecurity') THEN
+
+    CREATE INDEX `ix_account_tokens_user_id_purpose_token_hash` ON `account_tokens` (`user_id`, `purpose`, `token_hash`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003145412_AccountSecurity') THEN
+
+    CREATE INDEX `ix_recovery_codes_user_id_scope_code_hash` ON `recovery_codes` (`user_id`, `scope`, `code_hash`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003145412_AccountSecurity') THEN
+
+    CREATE UNIQUE INDEX `ix_user_authenticators_user_id` ON `user_authenticators` (`user_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003145412_AccountSecurity') THEN
+
+    INSERT INTO `__helios_migrations_history` (`MigrationId`, `ProductVersion`)
+    VALUES ('20261003145412_AccountSecurity', '9.0.19');
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
 COMMIT;
 

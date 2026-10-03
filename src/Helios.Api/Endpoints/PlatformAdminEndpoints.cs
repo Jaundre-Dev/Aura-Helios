@@ -5,6 +5,7 @@ using Helios.Application.Common;
 using Helios.Application.Features.Platform;
 using Helios.Contracts.Billing;
 using Helios.Contracts.Catalogue;
+using Helios.Contracts.Identity;
 using Helios.Contracts.Platform;
 using Helios.Domain.Execution;
 using Helios.Domain.Webhooks;
@@ -83,6 +84,12 @@ public static class PlatformAdminEndpoints
 
     private static void MapStaff(RouteGroupBuilder group)
     {
+        group.MapPost("/recovery-codes", async (PlatformStaffService service, CancellationToken ct) =>
+                Results.Ok(new RecoveryCodesResponse(await service.NewRecoveryCodesAsync(ct))))
+            .WithName("NewPlatformRecoveryCodes")
+            .WithSummary("Replaces the caller's platform recovery codes (shown once). Each stands in for the authenticator once.")
+            .Produces<RecoveryCodesResponse>();
+
         group.MapGet("/staff", async (PlatformStaffService service, CancellationToken ct) =>
                 Results.Ok(await service.ListAsync(ct)))
             .WithName("ListPlatformStaff")

@@ -64,6 +64,65 @@ public sealed class JwtTokenIssuer(IOptions<JwtOptions> options, TimeProvider cl
         return new PlatformSessionResponse(encoded, expiresAt, role);
     }
 
+    /// <summary>
+    /// The short-lived proof that the password was right, exchanged with a second factor for a
+    /// session. Issued for a separate audience, so the API's bearer validation rejects it outright.
+    /// </summary>
+    public MfaChallengeResponse IssueMfaChallenge(Guid userId, string securityStamp)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(securityStamp);
+
+        var now = clock.GetUtcNow();
+        var expiresAt = now + MfaChallengeLifetime;
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey));
+
+        var token = new JwtSecurityToken(
+            issuer: _options.Issuer,
+            audience: MfaAudience,
+            claims: [new Claim(HeliosClaims.Subject, userId.ToString()), new Claim(HeliosClaims.SecurityStamp, securityStamp)],
+            notBefore: now.UtcDateTime,
+            expires: expiresAt.UtcDateTime,
+            signingCredentials: new SigningCredentials(key, SecurityAlgorithms.HmacSha256));
+
+        return new MfaChallengeResponse(true, new JwtSecurityTokenHandler().WriteToken(token), expiresAt);
+    }
+
+    /// <summary>The user and stamp from a valid, unexpired challenge; null for anything else.</summary>
+    public (Guid UserId, string SecurityStamp)? ReadMfaChallenge(string token)
+    {
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
+
+        try
+        {
+            var principal = handler.ValidateToken(token, new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidIssuer = _options.Issuer,
+                ValidateAudience = true,
+                ValidAudience = MfaAudience,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.SigningKey)),
+                ValidateLifetime = true,
+                ClockSkew = TimeSpan.FromSeconds(30),
+                LifetimeValidator = (notBefore, expires, _, _) =>
+                    expires is { } e && e > clock.GetUtcNow().UtcDateTime.AddSeconds(-30)
+            }, out _);
+
+            return Guid.TryParse(principal.FindFirstValue(HeliosClaims.Subject), out var userId) &&
+                   principal.FindFirstValue(HeliosClaims.SecurityStamp) is { Length: > 0 } stamp
+                ? (userId, stamp)
+                : null;
+        }
+        catch (Exception ex) when (ex is SecurityTokenException or ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    public static readonly TimeSpan MfaChallengeLifetime = TimeSpan.FromMinutes(5);
+
+    private string MfaAudience => _options.Audience + "#mfa";
+
     private static List<Claim> IdentityClaims(Guid userId, string email, string? displayName, string securityStamp)
     {
         ArgumentException.ThrowIfNullOrEmpty(securityStamp);

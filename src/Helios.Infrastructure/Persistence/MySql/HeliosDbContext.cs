@@ -56,6 +56,9 @@ public class HeliosDbContext(
     public DbSet<Upload> Uploads => Set<Upload>();
     public DbSet<PlatformStaffMember> PlatformStaff => Set<PlatformStaffMember>();
     public DbSet<ReviewDecision> ReviewDecisions => Set<ReviewDecision>();
+    public DbSet<AccountToken> AccountTokens => Set<AccountToken>();
+    public DbSet<UserAuthenticator> UserAuthenticators => Set<UserAuthenticator>();
+    public DbSet<RecoveryCode> RecoveryCodes => Set<RecoveryCode>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

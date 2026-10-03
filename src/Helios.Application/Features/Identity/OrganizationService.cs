@@ -66,6 +66,14 @@ public sealed class OrganizationService(
         var userId = access.RequireUser();
         var slug = Slug.From(request.Slug ?? request.Name);
 
+        // Plan section 4: sign up → verify email → create the company. The Owner of a billing
+        // customer must be reachable at a proven address.
+        var person = (await users.GetAsync([userId], ct)).GetValueOrDefault(userId);
+        if (person is not { EmailVerified: true })
+        {
+            throw new ForbiddenException("Verify your email address before creating a company.", "email_not_verified");
+        }
+
         return await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
             if (await db.Organizations.AnyAsync(o => o.Slug == slug, token))

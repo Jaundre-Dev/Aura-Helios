@@ -97,6 +97,7 @@ app.MapGet("/health/ready", async (HeliosDbContext db, CancellationToken ct) =>
 .WithName("Readiness");
 
 app.MapAuthEndpoints();
+app.MapAccountEndpoints();
 app.MapOrganizationEndpoints();
 app.MapWorkspaceEndpoints();
 app.MapProjectEndpoints();

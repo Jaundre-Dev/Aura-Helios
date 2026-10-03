@@ -52,6 +52,9 @@ public interface IHeliosDbContext
     DbSet<Upload> Uploads { get; }
     DbSet<PlatformStaffMember> PlatformStaff { get; }
     DbSet<ReviewDecision> ReviewDecisions { get; }
+    DbSet<AccountToken> AccountTokens { get; }
+    DbSet<UserAuthenticator> UserAuthenticators { get; }
+    DbSet<RecoveryCode> RecoveryCodes { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

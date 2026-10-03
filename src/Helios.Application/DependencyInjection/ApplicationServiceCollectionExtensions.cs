@@ -1,4 +1,5 @@
 using FluentValidation;
+using Helios.Application.Features.Accounts;
 using Helios.Application.Features.ApiKeys;
 using Helios.Application.Features.Billing;
 using Helios.Application.Features.Catalogue;
@@ -48,6 +49,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<WebhookOutbox>();
         services.AddScoped<WebhookService>();
 
+        services.AddScoped<AccountSecurityService>();
         services.AddScoped<PlatformAccess>();
         services.AddScoped<PlatformStaffService>();
         services.AddScoped<PlatformAdministrationService>();

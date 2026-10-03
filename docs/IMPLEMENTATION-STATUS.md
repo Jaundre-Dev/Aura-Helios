@@ -498,6 +498,39 @@ Forward migration `20261003142237_ReviewDecisions`: `review_decisions` (FK to `a
 
 **This is a measuring tool, not a measurement.** No representative dataset exists yet, so no product has a measured result and the P3 gate is still open.
 
+## Slice B1/B10 — email verification, password reset, customer MFA, recovery codes (2026-10-03)
+
+- **Email** (`Helios:Email:Sender` = `smtp` | `file`): an SMTP sender for any contracted relay (TLS by default; credentials from secret configuration), and a development file drop that Production refuses. With no sender configured, the flows that need email return `503 email_unavailable`.
+- **Tokens**: single-use random tokens; only SHA-256 hashes are stored (`account_tokens`). Verification links last 48 hours, reset links 30 minutes. Issuing a new token kills the previous one. Redemption is a conditional update, so it is race-safe and works on any API instance (ASP.NET data-protection tokens were deliberately not used).
+- **Email verification**: a link is sent at registration; `POST /auth/verify-email` and `/auth/resend-verification` handle it. **Creating a company now requires a verified email** (plan section 4). Existing accounts verify the first time they create a company.
+- **Password reset**: `POST /auth/forgot-password` always returns 202 and sends nothing for unknown addresses. `POST /auth/reset-password` checks the new password before spending the link. A completed reset rotates the security stamp (signing the account out everywhere), lifts any lockout and marks the email verified.
+- **Customer two-step sign-in**:
+  - Set-up: `POST /auth/mfa/enrol`, then `…/confirm`, which returns 10 one-time recovery codes; `…/disable` needs a code; `…/recovery-codes` regenerates them with a current code; `GET /auth/security` shows the state.
+  - Sign-in: with an authenticator on, the password alone returns `{mfaRequired, mfaToken}`. That token is a 5-minute JWT for a separate audience, so bearer authentication rejects it outright. `POST /auth/mfa/login` exchanges it, with a fresh TOTP code or an unused recovery code, for a session.
+  - Rules: codes cannot be replayed; five failures lock for 15 minutes; "sign out everywhere" kills open challenges.
+- **Platform recovery codes (B10)**: `POST /api/v1/platform/recovery-codes`. A recovery code stands in for the authenticator once at `/platform/mfa/verify`. An MFA reset invalidates the staff member's codes.
+
+### Bug found and fixed
+
+The code-lockout counter (customer and platform staff) locked after **four** failures, not five. Both values were set in one UPDATE with assignments referring to each other, and MySQL evaluates SET clauses left to right. It is now a compare-and-set on the observed count. The platform lockout test now asserts `mfa_invalid` for the first five failures, so it would catch this.
+
+### Schema
+
+Forward migration `AccountSecurity`: `account_tokens`, `user_authenticators`, `recovery_codes`. Idempotent script regenerated.
+
+| Command | Result |
+| --- | --- |
+| `dotnet test Helios.sln --no-build` | UnitTests 174, ArchitectureTests 4, IntegrationTests 221 — all passed |
+
+`AccountSecurityTests` (5) cover:
+- company creation blocked until verification; links single-use, replaced on resend, bound to their account;
+- reset: no enumeration, weak passwords refused without spending the link, single use, old sessions revoked, lockout lifted;
+- MFA: the challenge is not a bearer token, no replay, a recovery code works once, revoke kills challenges;
+- lockout after exactly five bad codes; disabling MFA needs a code;
+- platform recovery codes.
+
+Test accounts now verify their email by following the emailed link.
+
 ## Required update format for Claude
 
 For each completed slice record: date, phase, real user-visible behaviour, changed files, exact validation commands and outcomes, remaining blockers, and next concrete step. Mark a phase complete only after its acceptance gate passes. Distinguish synthetic sandbox functionality from verified live integration.

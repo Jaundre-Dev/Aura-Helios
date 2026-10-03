@@ -1,3 +1,5 @@
+using Helios.Application.Abstractions.Messaging;
+using Helios.Infrastructure.Messaging;
 using Helios.Application.Abstractions.Execution;
 using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Features.Execution;
@@ -110,8 +112,45 @@ public static class InfrastructureServiceCollectionExtensions
         AddPaymentGateway(services, configuration);
         AddWebhooks(services, configuration);
         AddDocuments(services, configuration);
+        AddEmail(services, configuration);
 
         return services;
+    }
+
+    /// <summary>
+    /// Transactional email (<c>Helios:Email:Sender</c>): <c>smtp</c> through a contracted relay, or
+    /// <c>file</c> (Development only — writes messages to <c>Helios:Email:File:Directory</c>). With
+    /// none configured nothing is registered, and flows that need email answer 503.
+    /// </summary>
+    private static void AddEmail(IServiceCollection services, IConfiguration configuration)
+    {
+        var section = configuration.GetSection("Helios:Email");
+        var sender = section["Sender"];
+        var from = section["From"] ?? "no-reply@helios.invalid";
+
+        switch (sender?.ToLowerInvariant())
+        {
+            case null or "":
+                return;
+
+            case "smtp":
+                var smtp = section.GetSection("Smtp").Get<SmtpEmailOptions>() ?? new SmtpEmailOptions();
+                if (string.IsNullOrWhiteSpace(smtp.Host))
+                {
+                    throw new InvalidOperationException("Helios:Email:Smtp:Host is required for the smtp sender.");
+                }
+
+                services.AddSingleton<IEmailSender>(new SmtpEmailSender(smtp, from));
+                return;
+
+            case "file":
+                var directory = section["File:Directory"] ?? Path.Combine(Path.GetTempPath(), "helios-mail");
+                services.AddSingleton<IEmailSender>(sp => new FileDropEmailSender(directory, sp.GetRequiredService<TimeProvider>()));
+                return;
+
+            default:
+                throw new InvalidOperationException($"Unknown Helios:Email:Sender '{sender}'. Use 'smtp' or 'file'.");
+        }
     }
 
     /// <summary>

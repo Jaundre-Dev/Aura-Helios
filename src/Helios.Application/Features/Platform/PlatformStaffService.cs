@@ -2,7 +2,9 @@ using System.Text.Json;
 using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Common;
+using Helios.Application.Features.Accounts;
 using Helios.Contracts.Platform;
+using Helios.Domain.Identity;
 using Helios.Domain.Platform;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,6 +22,7 @@ public sealed class PlatformStaffService(
     PlatformAccess access,
     IUserDirectory users,
     IPayloadProtector protector,
+    AccountSecurityService recoveryCodes,
     IAuditWriter audit,
     TimeProvider clock)
 {
@@ -92,6 +95,11 @@ public sealed class PlatformStaffService(
         staff.FailedCodeCount = 0;
         staff.CodeLockedUntil = null;
 
+        // Recovery codes belong to the old authenticator; they stop working with it.
+        await db.RecoveryCodes
+            .Where(c => c.UserId == userId && c.Scope == RecoveryCodeScope.Platform && c.UsedAt == null)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.UsedAt, clock.GetUtcNow()), ct);
+
         audit.Record("platform.staff.mfa_reset", nameof(PlatformStaffMember), userId.ToString());
         await db.SaveChangesAsync(ct);
     }
@@ -158,12 +166,17 @@ public sealed class PlatformStaffService(
             throw new ForbiddenException("Too many invalid codes. Try again later.", "mfa_locked");
         }
 
+        // A one-time recovery code stands in for a lost authenticator, but never confirms one.
+        var recovery = !confirming && AccountSecurityService.LooksLikeRecoveryCode(code);
+
         var secret = Convert.FromBase64String(protector.Unprotect(staff.TotpKeyId, staff.TotpSecretEnvelope));
-        var step = Totp.Verify(secret, code, now);
+        var step = recovery ? null : Totp.Verify(secret, code, now);
 
         // Accepting is one conditional update: only a step later than any accepted before. Two
         // concurrent uses of one code, or a replay of an observed one, cannot both succeed.
-        var accepted = step is { } s && await db.PlatformStaff
+        var accepted = recovery
+            ? await recoveryCodes.RedeemRecoveryCodeAsync(userId, RecoveryCodeScope.Platform, code, ct)
+            : step is { } s && await db.PlatformStaff
             .Where(x => x.Id == staff.Id && (x.LastTotpStep == null || x.LastTotpStep < s))
             .ExecuteUpdateAsync(set => set
                 .SetProperty(x => x.LastTotpStep, s)
@@ -173,20 +186,19 @@ public sealed class PlatformStaffService(
 
         if (!accepted)
         {
-            var lockUntil = now + PlatformStaffMember.CodeLockout;
-            await db.PlatformStaff
-                .Where(x => x.Id == staff.Id)
-                .ExecuteUpdateAsync(set => set
-                    .SetProperty(x => x.CodeLockedUntil, x => x.FailedCodeCount + 1 >= PlatformStaffMember.MaxFailedCodes ? lockUntil : x.CodeLockedUntil)
-                    .SetProperty(x => x.FailedCodeCount, x => x.FailedCodeCount + 1 >= PlatformStaffMember.MaxFailedCodes ? 0 : x.FailedCodeCount + 1), ct);
+            await CountFailureAsync(staff.Id, now + PlatformStaffMember.CodeLockout, ct);
 
-            await RecordAsync(userId, allowed: false, step is null ? "invalid_code" : "replayed_code", ct);
+            await RecordAsync(userId, allowed: false, recovery ? "invalid_recovery_code" : step is null ? "invalid_code" : "replayed_code", ct);
             throw new ForbiddenException("The code is not valid.", "mfa_invalid");
         }
 
-        await RecordAsync(userId, allowed: true, confirming ? "confirmed" : null, ct);
+        await RecordAsync(userId, allowed: true, confirming ? "confirmed" : recovery ? "recovery_code" : null, ct);
         return staff.Role;
     }
+
+    /// <summary>New platform recovery codes for the signed-in staff member (shown once).</summary>
+    public Task<IReadOnlyList<string>> NewRecoveryCodesAsync(CancellationToken ct) =>
+        recoveryCodes.NewRecoveryCodesAsync(access.RequireUser(), RecoveryCodeScope.Platform, ct);
 
     private async Task<PlatformStaffMember> UpsertAsync(Guid userId, PlatformRole role, Guid? grantedBy, string source, CancellationToken ct)
     {
@@ -209,6 +221,32 @@ public sealed class PlatformStaffService(
 
         await db.SaveChangesAsync(ct);
         return staff;
+    }
+
+    /// <summary>
+    /// Counts a failed code; the fifth locks. Compare-and-set on the observed count: MySQL evaluates
+    /// SET clauses left to right, so one UPDATE whose assignments refer to each other locks early.
+    /// </summary>
+    private async Task CountFailureAsync(Guid staffId, DateTimeOffset lockUntil, CancellationToken ct)
+    {
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var current = await db.PlatformStaff.AsNoTracking()
+                .Where(s => s.Id == staffId).Select(s => s.FailedCodeCount).SingleAsync(ct);
+            var locks = current + 1 >= PlatformStaffMember.MaxFailedCodes;
+            DateTimeOffset? newLock = locks ? lockUntil : null;
+
+            var updated = await db.PlatformStaff
+                .Where(s => s.Id == staffId && s.FailedCodeCount == current)
+                .ExecuteUpdateAsync(set => set
+                    .SetProperty(s => s.FailedCodeCount, locks ? 0 : current + 1)
+                    .SetProperty(s => s.CodeLockedUntil, s => newLock ?? s.CodeLockedUntil), ct);
+
+            if (updated == 1)
+            {
+                return;
+            }
+        }
     }
 
     private async Task RecordAsync(Guid userId, bool allowed, string? reason, CancellationToken ct)

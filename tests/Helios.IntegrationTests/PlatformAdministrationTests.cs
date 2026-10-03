@@ -120,6 +120,7 @@ public sealed class PlatformAdministrationTests(HeliosApiFactory factory)
         {
             var bad = await staff.Account.Client.PostAsJsonAsync("/api/v1/platform/mfa/confirm", new MfaCodeRequest(WrongCode(staff, step)));
             Assert.Equal(HttpStatusCode.Forbidden, bad.StatusCode);
+            Assert.Equal("mfa_invalid", await CodeOf(bad)); // not yet locked: the fifth failure is what locks
         }
 
         var right = await staff.Account.Client.PostAsJsonAsync("/api/v1/platform/mfa/confirm", new MfaCodeRequest(staff.CodeAt(step)));

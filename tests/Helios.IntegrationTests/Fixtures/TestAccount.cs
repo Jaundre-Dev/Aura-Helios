@@ -4,6 +4,7 @@ using Helios.Contracts.Identity;
 using Helios.Contracts.Organizations;
 using Helios.Contracts.Workspaces;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Helios.IntegrationTests.Fixtures;
 
@@ -40,6 +41,15 @@ public sealed class TestAccount
         response.EnsureSuccessStatusCode();
 
         account.Use((await response.Content.ReadFromJsonAsync<AuthResponse>())!);
+
+        // Verify the address the way a person would: follow the emailed link.
+        if (factory.Services.GetService<Application.Abstractions.Messaging.IEmailSender>() is RecordingEmailSender mailbox &&
+            mailbox.LatestLink(account.Email, "verify-email") is { } link)
+        {
+            (await account.Client.PostAsJsonAsync("/api/v1/auth/verify-email",
+                new VerifyEmailRequest(link.UserId, link.Token))).EnsureSuccessStatusCode();
+        }
+
         return account;
     }
 

@@ -59,6 +59,9 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
     /// <summary>Records every webhook delivery; answers 200 unless a URL is told to fail.</summary>
     public RecordingWebhookReceiver WebhookReceiver { get; } = new();
 
+    /// <summary>Every email the API sent (verification and reset links).</summary>
+    public RecordingEmailSender Emails { get; } = new();
+
     /// <summary>Delivers due webhooks until none are left. Returns how many were attempted.</summary>
     public async Task<int> DrainWebhooksAsync(int max = 100)
     {
@@ -113,6 +116,7 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<TestProviderLog>();
+            services.AddSingleton<Application.Abstractions.Messaging.IEmailSender>(Emails);
             services.AddSingleton<IProductExecutor, TestMeteredExecutor>();
             services.AddSingleton<IProductExecutor, TestProviderExecutor>();
             services.AddSingleton<ITenantScopeFactory, TestTenantScopes>();

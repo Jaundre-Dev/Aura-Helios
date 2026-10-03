@@ -14,7 +14,7 @@ public sealed class UserDirectory(HeliosDbContext db) : IUserDirectory
         return await db.Users
             .AsNoTracking()
             .Where(u => u.NormalizedEmail == normalised && u.IsActive)
-            .Select(u => new UserSummary(u.Id, u.Email, u.DisplayName, u.IsActive))
+            .Select(u => new UserSummary(u.Id, u.Email, u.DisplayName, u.IsActive, u.EmailConfirmed))
             .SingleOrDefaultAsync(cancellationToken);
     }
 
@@ -30,7 +30,7 @@ public sealed class UserDirectory(HeliosDbContext db) : IUserDirectory
         return await db.Users
             .AsNoTracking()
             .Where(u => userIds.Contains(u.Id))
-            .Select(u => new UserSummary(u.Id, u.Email, u.DisplayName, u.IsActive))
+            .Select(u => new UserSummary(u.Id, u.Email, u.DisplayName, u.IsActive, u.EmailConfirmed))
             .ToDictionaryAsync(u => u.Id, cancellationToken);
     }
 }

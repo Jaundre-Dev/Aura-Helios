@@ -50,6 +50,11 @@ public sealed class ProductionSafetyCheck(
             yield return "No malware scanner is configured (Helios:Uploads:Scanner); uploads would go unscanned.";
         }
 
+        if (string.Equals(configuration["Helios:Email:Sender"], "file", StringComparison.OrdinalIgnoreCase))
+        {
+            yield return "Helios:Email:Sender is the development file drop; emails would never reach customers.";
+        }
+
         if (configuration.GetValue("Helios:Webhooks:AllowPrivateNetworks", false))
         {
             yield return "Helios:Webhooks:AllowPrivateNetworks is enabled (SSRF protection off).";

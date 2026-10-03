@@ -1,9 +1,11 @@
 using System.Security.Claims;
 using Helios.Api.Middleware;
 using Helios.Api.Security;
+using Helios.Application.Abstractions.Messaging;
 using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Common;
+using Helios.Application.Features.Accounts;
 using Helios.Contracts.Identity;
 using Helios.Infrastructure.Persistence.MySql.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -27,6 +29,10 @@ public static class AuthEndpoints
                 RegisterRequest request,
                 UserManager<HeliosUser> users,
                 JwtTokenIssuer issuer,
+                AccountSecurityService security,
+                IEnumerable<IEmailSender> senders,
+                IConfiguration configuration,
+                ILogger<RegisterRequest> logger,
                 CancellationToken ct) =>
             {
                 var user = new HeliosUser
@@ -49,6 +55,20 @@ public static class AuthEndpoints
                     return Results.ValidationProblem(errors, title: "Registration failed.");
                 }
 
+                // Best effort: the account exists either way, and the person can ask for the link
+                // again. Creating a company waits for the address to be verified.
+                if (senders.LastOrDefault() is { } sender)
+                {
+                    try
+                    {
+                        await AccountEndpoints.SendVerificationAsync(user, security, sender, configuration, ct);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        logger.LogWarning("Verification email for a new account could not be sent: {Error}", ex.GetType().Name);
+                    }
+                }
+
                 var auth = issuer.Issue(user.Id, user.Email!, user.DisplayName, user.SecurityStamp!, workspaceId: null, role: null);
 
                 return Results.Created($"/api/v1/auth/me", auth);
@@ -67,6 +87,7 @@ public static class AuthEndpoints
                 IAuditWriter audit,
                 JwtTokenIssuer issuer,
                 TimeProvider clock,
+                AccountSecurityService accountSecurity,
                 CancellationToken ct) =>
             {
                 var user = await users.FindByEmailAsync(request.Email);
@@ -112,27 +133,16 @@ public static class AuthEndpoints
 
                 await users.ResetAccessFailedCountAsync(user);
 
-                // Seed the workspace claim from the last selection, but only if that grant is
-                // still live — access can be revoked between sessions.
-                Guid? workspaceId = null;
-                WorkspaceRole? role = null;
-
-                if (user.DefaultWorkspaceId is { } previous &&
-                    await FindLiveGrantAsync(db, previous, user.Id, ct) is { } grant)
+                // With an authenticator, the password alone earns only a short challenge to be
+                // exchanged with a code at /auth/mfa/login — never a session.
+                if (await accountSecurity.MfaEnabledAsync(user.Id, ct))
                 {
-                    workspaceId = previous;
-                    role = grant;
+                    audit.Record("auth.login.mfa_challenge", "User", user.Id.ToString());
+                    await db.SaveChangesAsync(ct);
+                    return Results.Ok(issuer.IssueMfaChallenge(user.Id, user.SecurityStamp!));
                 }
 
-                user.LastSignInAt = clock.GetUtcNow();
-                await users.UpdateAsync(user);
-
-                RecordSignIn(audit, user.Id, allowed: true, null);
-                await db.SaveChangesAsync(ct);
-
-                var auth = issuer.Issue(user.Id, user.Email!, user.DisplayName, user.SecurityStamp!, workspaceId, role);
-
-                return Results.Ok(auth);
+                return Results.Ok(await SignInAsync(user, users, db, audit, issuer, clock, ct));
             })
             .WithName("Login")
             .RequireRateLimiting(AuthRateLimiting.PolicyName)
@@ -222,10 +232,42 @@ public static class AuthEndpoints
     }
 
     /// <summary>
+    /// Issues a session after every factor has been checked: seeds the workspace claim from the
+    /// last selection (only if that grant is still live) and records the sign-in.
+    /// </summary>
+    internal static async Task<AuthResponse> SignInAsync(
+        HeliosUser user,
+        UserManager<HeliosUser> users,
+        IHeliosDbContext db,
+        IAuditWriter audit,
+        JwtTokenIssuer issuer,
+        TimeProvider clock,
+        CancellationToken ct)
+    {
+        Guid? workspaceId = null;
+        WorkspaceRole? role = null;
+
+        if (user.DefaultWorkspaceId is { } previous &&
+            await FindLiveGrantAsync(db, previous, user.Id, ct) is { } grant)
+        {
+            workspaceId = previous;
+            role = grant;
+        }
+
+        user.LastSignInAt = clock.GetUtcNow();
+        await users.UpdateAsync(user);
+
+        RecordSignIn(audit, user.Id, allowed: true, null);
+        await db.SaveChangesAsync(ct);
+
+        return issuer.Issue(user.Id, user.Email!, user.DisplayName, user.SecurityStamp!, workspaceId, role);
+    }
+
+    /// <summary>
     /// The caller's role in a workspace, only while the workspace and its company are active and
     /// the caller is still an active member of that company; null otherwise.
     /// </summary>
-    private static async Task<WorkspaceRole?> FindLiveGrantAsync(
+    internal static async Task<WorkspaceRole?> FindLiveGrantAsync(
         IHeliosDbContext db, Guid workspaceId, Guid userId, CancellationToken ct)
     {
         var grants = await (
@@ -243,7 +285,7 @@ public static class AuthEndpoints
         return grants.Count == 1 ? grants[0] : null;
     }
 
-    private static void RecordSignIn(IAuditWriter audit, Guid userId, bool allowed, string? reason) =>
+    internal static void RecordSignIn(IAuditWriter audit, Guid userId, bool allowed, string? reason) =>
         audit.Record(
             "auth.login",
             "User",

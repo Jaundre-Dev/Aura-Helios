@@ -17,7 +17,7 @@ public sealed class MfaCodeRequestValidator : AbstractValidator<MfaCodeRequest>
 {
     public MfaCodeRequestValidator()
     {
-        RuleFor(r => r.Code).NotEmpty().Matches("^[0-9 ]{6,8}$").WithMessage("Enter the 6-digit code from the authenticator app.");
+        RuleFor(r => r.Code).NotEmpty().Matches("^([0-9 ]{6,8}|[A-Za-z2-7]{5}-?[A-Za-z2-7]{5})$").WithMessage("Enter the 6-digit code from the authenticator app, or a recovery code.");
     }
 }
 

@@ -14,4 +14,5 @@ public interface IUserDirectory
         CancellationToken cancellationToken);
 }
 
-public sealed record UserSummary(Guid Id, string? Email, string? DisplayName, bool IsActive);
+/// <param name="EmailVerified">The person proved control of the address (verification link or password reset).</param>
+public sealed record UserSummary(Guid Id, string? Email, string? DisplayName, bool IsActive, bool EmailVerified = false);
