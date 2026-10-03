@@ -24,9 +24,13 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
 | P6 Expansion | Backlog | Customer-led catalogue additions |
 
-## Remaining work (consolidated 2026-10-03)
+## Remaining work (consolidated, updated 2026-10-03)
 
-This is the current list. The "Remaining" notes inside each slice below record what was outstanding when that slice landed, and some have since been done: retention purge (P3.1), lease renewal (P2.5), platform administration for prices and adjustments (P2.4). Validation at this point: `dotnet build Helios.sln` succeeded with 0 warnings; `dotnet test Helios.sln` passed UnitTests 174, ArchitectureTests 4 and IntegrationTests 216.
+This is the current list. The "Remaining" notes inside each slice below record what was outstanding when that slice landed, and some have since been done, such as the retention purge (P3.1), lease renewal (P2.5), platform administration (P2.4), and email verification, password reset and customer MFA (B1).
+
+Validation at this point, on `feature/p0-p1-foundation` at commit `cc8aa18`: `dotnet build Helios.sln` succeeded with 0 warnings, and `dotnet test Helios.sln` passed UnitTests 174, ArchitectureTests 4 and IntegrationTests 234.
+
+**The branch has not been merged into `main`.** The merge was requested, then deferred when work stopped. All work is committed locally on `feature/p0-p1-foundation`, and the later commits are not pushed.
 
 ### A. Needs the owner (decision, purchase, contract or access)
 
@@ -46,26 +50,42 @@ Nothing here can be finished in code alone. Each item names what it unblocks.
 | A10 | Legal and privacy decisions: customer terms and processing-agreement versions, retention limits per product, hosting and processing regions, a POPIA section 72 basis for any cross-border processing, biometric review | Terms/DPA acceptance records (B2), live approval of restricted products, final retention settings |
 | A11 | A ClamAV (or equivalent) deployment for each environment | Live uploads. Production refuses to start without a scanner |
 | A12 | Production object storage (bucket, region, encryption, lifecycle) | Large or high-volume documents. The current MySQL store is capped at 16 MB per object |
-| A13 | A transactional email provider | Real delivery of email verification and password reset (B1) |
+| A13 | A transactional email provider (any SMTP relay) and its credentials | Sending verification and reset emails; the SMTP sender is built (B1). Without it no new company can be created |
 | A14 | A pilot sector and 3–5 pilot customers | P5 pilots, pricing validation and the launch gate |
 
-### B. Engineering work that can proceed now
+### B. Engineering work
 
-These items need no owner input, unless one is noted.
+Done since the first consolidated list (each has its own slice section below):
+
+| # | Work | Slice |
+| --- | --- | --- |
+| B1 | Email verification, password reset, customer two-step sign-in | B1/B10 |
+| B2 | Agreement acceptance records; live use gated on the current terms and processing agreement, plus a stated purpose | B2 |
+| B3 | Per-key monthly budgets, company spend limits, per-credential rate limits | B3 |
+| B4 | Public OpenAPI contract with security schemes; [API-QUICKSTART.md](API-QUICKSTART.md) | B4/B5 |
+| B5 | Ledger transaction and usage CSV exports | B4/B5 |
+| B8 | `request.reviewed` webhook | B8 |
+| B9 | Four-eyes approval for credit adjustments above R5 000 | B9 |
+| B10 | Recovery codes for customer and platform-staff authenticators | B1/B10 |
+
+Still to do. None of these needs the owner:
 
 | # | Work | Notes |
 | --- | --- | --- |
-| B1 | Email verification, password reset and customer MFA | Token flows and tests can be built against a development mail sink. Real sending needs A13 |
-| B2 | Onboarding records: accepted terms and processing-agreement versions, permitted-purpose statements, production-approval request flow | Final document versions come from A10 |
-| B3 | Per-key budgets and expiry policies, company spend limits, per-key and per-company rate limits on product execution | Plan sections 4 and 13; abuse limits for live use |
-| B4 | Publish OpenAPI outside Development, with curl examples per product; later TypeScript and Python SDKs generated from the contract | Plan section 8 |
-| B5 | Usage and ledger CSV exports for Finance | Invoices themselves wait for A7 |
-| B6 | Operational metrics: request counts, latency percentiles, queue delay, failure and review rates, reconciliation age, provider spend | Plan section 13. A metrics backend choice may come later |
-| B7 | Provider adapter framework: capability and region metadata, per-provider concurrency limits and circuit breakers, typed "unavailable" adapters | Ready for P4 partners once A9 lands |
-| B8 | A customer webhook event when a review decision is recorded | Optional |
-| B9 | Two-person approval for credit adjustments above a threshold | Optional. Today the control is the R100 000 cap plus the audit trail |
-| B10 | Platform MFA recovery codes | Today a lost authenticator needs another Administrator's reset |
-| B11 | Runbooks, a backup restore drill script, and a load-test harness | Running them is P5 work and needs an environment |
+| B6 | Operational metrics: request counts, latency percentiles, queue delay, failure and review rates, reconciliation age, provider calls, settled revenue | Started and backed out unfinished, so nothing is in the branch. Plan: `System.Diagnostics.Metrics` instruments (meter `Helios`, OpenTelemetry-ready), an in-process aggregator, and a staff-only `GET /api/v1/platform/metrics` that adds database gauges (queued, reconciling and needs-review jobs; dead letters; pending approvals). Choosing an exporter or backend is a later deployment decision |
+| B7 | Provider adapter framework: capability and region metadata, per-provider concurrency limits and circuit breakers, typed adapter interfaces and executors for bank verification and company lookup | No vendor code until A9; tests use a fake provider. Partner products stay Planned until a real adapter is configured |
+| B11 | Runbooks (stuck reconciliation, dead letters, payment callbacks, key compromise, restore), a guarded restore-drill script, a load-test harness | Running them is P5 work and needs an environment |
+| B12 | Merge `feature/p0-p1-foundation` into `main` and push | Waiting for the owner to resume or merge themselves |
+
+### Configuration a deployment now needs
+
+Set these from secret configuration, never committed:
+
+- **Email**: `Helios:Email:Sender=smtp`, plus `Helios:Email:From` and `Helios:Email:Smtp:{Host,Port,Username,Password}`. Without these, verification and reset return 503, so no new company can be created.
+- **Legal documents**: `Helios:Legal:Documents:{terms,dpa}`, set to the published versions. Without these, live use stays closed.
+- **Optional**: `Helios:Platform:AdjustmentApprovalThreshold` (default 5000) and `Helios:RateLimits:Products:{PermitLimit,WindowSeconds}` (default 600 per 60 s).
+- **First platform Administrator**: on the API host, run `dotnet Helios.Api.dll platform-staff grant <email> Administrator`. That person then enrols an authenticator before platform routes work.
+- **Database**: apply `deploy/sql/helios-migrations.idempotent.sql` (all migrations to date are additive).
 
 ### C. Known limits of the v1 document products
 
