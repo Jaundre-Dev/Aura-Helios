@@ -26,7 +26,9 @@ public static class PlatformAdminEndpoints
 
         var group = app.MapGroup("/api/v1/platform")
             .WithTags("Platform administration")
-            .RequireAuthorization(HeliosAuthPolicies.PlatformStaff);
+            .RequireAuthorization(HeliosAuthPolicies.PlatformStaff)
+            // Internal staff surface: not part of the published customer contract.
+            .ExcludeFromDescription();
 
         MapStaff(group);
         MapTenants(group);
@@ -41,7 +43,8 @@ public static class PlatformAdminEndpoints
         var mfa = app.MapGroup("/api/v1/platform/mfa")
             .WithTags("Platform administration")
             .RequireAuthorization()
-            .RequireRateLimiting(AuthRateLimiting.PolicyName);
+            .RequireRateLimiting(AuthRateLimiting.PolicyName)
+            .ExcludeFromDescription();
 
         mfa.MapPost("/enrol", async (PlatformStaffService service, CancellationToken ct) =>
                 Results.Ok(await service.EnrolAsync(ct)))

@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Helios.Application.Common;
 
 namespace Helios.Application.Features.Requests;
 
@@ -145,8 +146,8 @@ public static partial class ResultCorrections
         {
             csv.AppendJoin(',', new[]
             {
-                Cell(r.Section), Cell(r.Name), Cell(r.Original), Cell(r.Corrected), Cell(r.Final),
-                Cell(r.Page?.ToString(CultureInfo.InvariantCulture)), Cell(r.Source)
+                Csv.Cell(r.Section), Csv.Cell(r.Name), Csv.Cell(r.Original), Csv.Cell(r.Corrected), Csv.Cell(r.Final),
+                Csv.Cell(r.Page?.ToString(CultureInfo.InvariantCulture)), Csv.Cell(r.Source)
             }).Append("\r\n");
         }
 
@@ -191,21 +192,6 @@ public static partial class ResultCorrections
         value.ValueKind is JsonValueKind.String or JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null ||
         (value.ValueKind == JsonValueKind.Array && value.EnumerateArray().All(i => i.ValueKind is JsonValueKind.String or JsonValueKind.Number));
 
-    private static string Cell(string? value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return string.Empty;
-        }
-
-        if (value[0] is '=' or '+' or '-' or '@' or '\t' or '\r' &&
-            !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _))
-        {
-            value = "'" + value;
-        }
-
-        return value.IndexOfAny([',', '"', '\r', '\n']) >= 0 ? $"\"{value.Replace("\"", "\"\"")}\"" : value;
-    }
 
     /// <summary>Why a path cannot be corrected, or null when it can.</summary>
     private static string? Resolve(JsonElement result, string path)

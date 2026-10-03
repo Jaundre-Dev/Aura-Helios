@@ -276,6 +276,26 @@ public static partial class PlatformEndpoints
             .WithSummary("Usage and charges per product for a period (default: last 30 days).")
             .Produces<UsageResponse>();
 
+        group.MapGet("/exports/transactions.csv", async (
+                Guid organizationId, DateTimeOffset? from, DateTimeOffset? to, BillingQueryService service, TimeProvider clock, CancellationToken ct) =>
+            {
+                var end = to ?? clock.GetUtcNow();
+                return Results.File(await service.ExportTransactionsAsync(organizationId, from ?? end.AddDays(-30), end, ct),
+                    "text/csv", $"helios-transactions-{end:yyyyMMdd}.csv");
+            })
+            .WithName("ExportLedgerTransactions")
+            .WithSummary("Ledger transactions for a period (default: last 30 days) as CSV. Requires ViewBilling.");
+
+        group.MapGet("/exports/usage.csv", async (
+                Guid organizationId, DateTimeOffset? from, DateTimeOffset? to, BillingQueryService service, TimeProvider clock, CancellationToken ct) =>
+            {
+                var end = to ?? clock.GetUtcNow();
+                return Results.File(await service.ExportUsageAsync(organizationId, from ?? end.AddDays(-30), end, ct),
+                    "text/csv", $"helios-usage-{end:yyyyMMdd}.csv");
+            })
+            .WithName("ExportUsage")
+            .WithSummary("Usage events for a period (default: last 30 days) as CSV. Requires ViewBilling.");
+
         group.MapGet("/spend-limit", async (Guid organizationId, SpendingLimits service, CancellationToken ct) =>
                 Results.Ok(await service.GetAsync(organizationId, ct)))
             .WithName("GetSpendLimit")

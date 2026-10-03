@@ -14,7 +14,7 @@ var consoleCommand = PlatformStaffCommand.TryParse(args, out var hostArgs);
 
 var builder = WebApplication.CreateBuilder(hostArgs);
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<HeliosOpenApiDocument>());
 
 // Every error response carries the request id, so a customer can quote it to support and it
 // lines up with the audit trail's correlation id.
@@ -67,7 +67,8 @@ if (consoleCommand is not null)
     return;
 }
 
-if (app.Environment.IsDevelopment())
+// The contract is public (plan section 8). Helios:OpenApi:Enabled=false hides it where required.
+if (app.Configuration.GetValue("Helios:OpenApi:Enabled", true))
 {
     app.MapOpenApi();
 }

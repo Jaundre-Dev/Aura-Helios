@@ -578,6 +578,24 @@ Forward migration `SpendingLimits` adds `api_keys.monthly_budget`, `organization
 - a company limit spanning keys, settable only by billing roles, and clearable;
 - per-credential rate limiting with `Retry-After`.
 
+## Slices B4/B5 — published API contract and finance exports (2026-10-03)
+
+- **OpenAPI**: `GET /openapi/v1.json` is now served in every environment (switch it off with `Helios:OpenApi:Enabled=false`). It carries the document title and description, and two security schemes: `portal` (JWT bearer) and `apiKey` (`X-Api-Key`). Platform staff routes and gateway callbacks are excluded from the public contract.
+- **Quickstart**: [API-QUICKSTART.md](API-QUICKSTART.md) gives curl examples for every step, from sign-up to live use, plus the error format. TypeScript and Python SDKs can be generated from the published document later.
+- **Finance exports** (ViewBilling: Owner, Finance; up to one year per file, 100 000 rows):
+  - `GET /api/v1/organizations/{id}/billing/exports/transactions.csv` — every ledger transaction, with available and reserved changes and the request or payment it belongs to.
+  - `GET /api/v1/organizations/{id}/billing/exports/usage.csv` — one row per usage event.
+  - CSV formatting (UTF-8 with BOM, RFC 4180, formula-injection-safe) is shared with the result export in `Common/Csv`.
+
+| Command | Result |
+| --- | --- |
+| `dotnet test Helios.sln --no-build` | UnitTests 174, ArchitectureTests 4, IntegrationTests 231 — all passed |
+
+`ApiDocsAndExportTests` cover:
+- the anonymous contract: expected paths and both schemes present, no staff routes;
+- finance exports containing the funding, reservations and two settlements with the right amounts;
+- Developer refused, and a backwards period refused.
+
 ## Required update format for Claude
 
 For each completed slice record: date, phase, real user-visible behaviour, changed files, exact validation commands and outcomes, remaining blockers, and next concrete step. Mark a phase complete only after its acceptance gate passes. Distinguish synthetic sandbox functionality from verified live integration.

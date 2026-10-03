@@ -75,6 +75,65 @@ public sealed class BillingQueryService(IHeliosDbContext db, OrganizationAccess 
         return new UsageResponse(from, to, LedgerService.Currency, ordered, ordered.Sum(l => l.Amount));
     }
 
+    /// <summary>Every ledger transaction in a period as CSV, oldest first, for the company's own books.</summary>
+    public async Task<byte[]> ExportTransactionsAsync(Guid organizationId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
+    {
+        await access.RequireAsync(organizationId, OrganizationPermission.ViewBilling, ct);
+        RequirePeriod(from, to);
+
+        var accounts = await db.LedgerAccounts.AsNoTracking()
+            .Where(a => a.OrganizationId == organizationId)
+            .ToDictionaryAsync(a => a.Id, a => a.Type, ct);
+
+        var transactions = await db.LedgerTransactions.AsNoTracking()
+            .Include(t => t.Entries)
+            .Where(t => t.OrganizationId == organizationId && t.CreatedAt >= from && t.CreatedAt < to)
+            .OrderBy(t => t.CreatedAt)
+            .Take(MaxExportRows)
+            .ToListAsync(ct);
+
+        return Csv.Write(
+            ["created_at", "type", "description", "available_change", "reserved_change", "currency", "api_request_id", "payment_id", "transaction_id"],
+            transactions.Select(t => new[]
+            {
+                Csv.Time(t.CreatedAt), t.Type.ToString(), t.Description,
+                Csv.Number(Change(t, accounts, LedgerAccountType.CustomerAvailable)),
+                Csv.Number(Change(t, accounts, LedgerAccountType.CustomerReserved)),
+                t.Currency, t.ApiRequestId?.ToString(), t.PaymentId?.ToString(), t.Id.ToString()
+            }));
+    }
+
+    /// <summary>Every usage event in a period as CSV: one row per charged (or free sandbox) request.</summary>
+    public async Task<byte[]> ExportUsageAsync(Guid organizationId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct)
+    {
+        await access.RequireAsync(organizationId, OrganizationPermission.ViewBilling, ct);
+        RequirePeriod(from, to);
+
+        var events = await db.UsageEvents.IgnoreQueryFilters().AsNoTracking()
+            .Where(u => u.OrganizationId == organizationId && u.OccurredAt >= from && u.OccurredAt < to)
+            .OrderBy(u => u.OccurredAt)
+            .Take(MaxExportRows)
+            .ToListAsync(ct);
+
+        return Csv.Write(
+            ["occurred_at", "product", "version", "environment", "unit", "quantity", "amount", "currency", "api_request_id", "workspace_id"],
+            events.Select(u => new[]
+            {
+                Csv.Time(u.OccurredAt), u.ProductSlug, u.ProductVersion, u.Environment.ToString(), u.Unit,
+                Csv.Number(u.Quantity), Csv.Number(u.Amount), u.Currency, u.ApiRequestId.ToString(), u.WorkspaceId.ToString()
+            }));
+    }
+
+    public const int MaxExportRows = 100_000;
+
+    private static void RequirePeriod(DateTimeOffset from, DateTimeOffset to)
+    {
+        if (to <= from || to - from > TimeSpan.FromDays(366))
+        {
+            throw new BadRequestException("Choose a period of up to one year, with 'to' after 'from'.", "invalid_period");
+        }
+    }
+
     private static decimal Change(
         Domain.Billing.LedgerTransaction transaction,
         IReadOnlyDictionary<Guid, LedgerAccountType> accounts,
