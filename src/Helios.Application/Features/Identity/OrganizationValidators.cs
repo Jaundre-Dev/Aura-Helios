@@ -13,3 +13,20 @@ public sealed class CreateOrganizationRequestValidator : AbstractValidator<Creat
             .WithMessage("Slug may contain only lowercase letters, digits and hyphens.");
     }
 }
+
+public sealed class AddOrganizationMemberRequestValidator : AbstractValidator<AddOrganizationMemberRequest>
+{
+    public AddOrganizationMemberRequestValidator()
+    {
+        RuleFor(r => r.Email).NotEmpty().EmailAddress().MaximumLength(256);
+        RuleFor(r => r.Role).IsInEnum();
+    }
+}
+
+public sealed class UpdateOrganizationMemberRequestValidator : AbstractValidator<UpdateOrganizationMemberRequest>
+{
+    public UpdateOrganizationMemberRequestValidator()
+    {
+        RuleFor(r => r.Role).IsInEnum();
+    }
+}

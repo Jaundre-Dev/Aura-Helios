@@ -23,6 +23,27 @@ public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organiz
     }
 }
 
+public sealed class OrganizationMemberConfiguration : IEntityTypeConfiguration<OrganizationMember>
+{
+    public void Configure(EntityTypeBuilder<OrganizationMember> builder)
+    {
+        builder.ToTable("organization_members");
+        builder.HasKey(m => m.Id);
+
+        // Stored as text so reordering the enum can never silently change anyone's access.
+        builder.Property(m => m.Role).HasConversion<string>().HasMaxLength(20);
+
+        // One membership per user per organisation; removal deactivates the row.
+        builder.HasIndex(m => new { m.OrganizationId, m.UserId }).IsUnique();
+        builder.HasIndex(m => m.UserId);
+
+        builder.HasOne(m => m.Organization)
+            .WithMany()
+            .HasForeignKey(m => m.OrganizationId)
+            .OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
 public sealed class WorkspaceConfiguration : IEntityTypeConfiguration<Workspace>
 {
     public void Configure(EntityTypeBuilder<Workspace> builder)

@@ -1,7 +1,9 @@
 using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Common;
+using Helios.Application.Features.Identity;
 using Helios.Contracts.Identity;
+using Helios.Contracts.Organizations;
 using Helios.Contracts.Workspaces;
 using Helios.Domain.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +12,8 @@ namespace Helios.Application.Features.Workspaces;
 
 public sealed class WorkspaceService(
     IHeliosDbContext db,
+    IUnitOfWork unitOfWork,
+    OrganizationAccess organizationAccess,
     IWorkspaceContext context,
     IAuditWriter audit)
 {
@@ -29,11 +33,15 @@ public sealed class WorkspaceService(
 
         // Order on the entity, before projecting. Ordering after the Select cannot be
         // translated: EF has no way to map a constructed record's property back to a column.
+        // The organisation membership join is defence in depth: removal from a company also
+        // deletes its workspace grants, but a stale grant must still not surface a workspace.
         var query =
             from member in db.WorkspaceMembers.IgnoreQueryFilters()
             where member.UserId == userId
             join workspace in db.Workspaces.IgnoreQueryFilters()
                 on member.WorkspaceId equals workspace.Id
+            where db.OrganizationMembers.Any(o =>
+                o.OrganizationId == workspace.OrganizationId && o.UserId == userId && o.IsActive)
             orderby workspace.Name
             select new WorkspaceResponse(
                 workspace.Id,
@@ -67,55 +75,68 @@ public sealed class WorkspaceService(
             .IgnoreQueryFilters()
             .SingleOrDefaultAsync(w => w.Id == id, ct);
 
-        return workspace is null ? null : ToResponse(workspace, membership.Role);
+        if (workspace is null || !await IsActiveOrganizationMemberAsync(workspace.OrganizationId, userId, ct))
+        {
+            return null;
+        }
+
+        return ToResponse(workspace, membership.Role);
     }
 
+    /// <summary>
+    /// Creates a workspace under a company the caller may administer. The permission check
+    /// share-locks the caller's membership inside the creating transaction, so a concurrent
+    /// removal from the company cannot interleave between the check and the insert. A caller
+    /// with no membership gets 404 — the same answer as a company that does not exist.
+    /// </summary>
     public async Task<WorkspaceResponse> CreateAsync(CreateWorkspaceRequest request, CancellationToken ct)
     {
         var userId = RequireUser();
-
-        var organisationExists = await db.Organizations.AnyAsync(o => o.Id == request.OrganizationId, ct);
-        if (!organisationExists)
-        {
-            throw new NotFoundException("Organization", request.OrganizationId);
-        }
-
         var slug = Slug.From(request.Slug ?? request.Name);
 
-        var slugTaken = await db.Workspaces
-            .IgnoreQueryFilters()
-            .AnyAsync(w => w.OrganizationId == request.OrganizationId && w.Slug == slug, ct);
+        // Checked once outside the transaction so a denial's audit row survives the failure,
+        // then again under lock inside it so the decision holds until commit.
+        await organizationAccess.RequireAsync(request.OrganizationId, OrganizationPermission.ManageWorkspaces, ct);
 
-        if (slugTaken)
+        return await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
-            throw new ConflictException($"A workspace with the slug '{slug}' already exists in this organization.");
-        }
+            await organizationAccess.RequireLockedAsync(
+                request.OrganizationId, OrganizationPermission.ManageWorkspaces, token);
 
-        var workspace = new Workspace
-        {
-            OrganizationId = request.OrganizationId,
-            Name = request.Name.Trim(),
-            Slug = slug,
-            Description = request.Description?.Trim()
-        };
+            var slugTaken = await db.Workspaces
+                .IgnoreQueryFilters()
+                .AnyAsync(w => w.OrganizationId == request.OrganizationId && w.Slug == slug, token);
 
-        // The creator becomes Owner in the same transaction. A workspace nobody can
-        // reach is not a useful failure mode.
-        var membership = new WorkspaceMember
-        {
-            WorkspaceId = workspace.Id,
-            UserId = userId,
-            Role = WorkspaceRole.Owner
-        };
+            if (slugTaken)
+            {
+                throw new ConflictException($"A workspace with the slug '{slug}' already exists in this organization.");
+            }
 
-        db.Workspaces.Add(workspace);
-        db.WorkspaceMembers.Add(membership);
+            var workspace = new Workspace
+            {
+                OrganizationId = request.OrganizationId,
+                Name = request.Name.Trim(),
+                Slug = slug,
+                Description = request.Description?.Trim()
+            };
 
-        audit.Record("workspace.create", nameof(Workspace), workspace.Id.ToString());
+            // The creator becomes Owner in the same transaction. A workspace nobody can
+            // reach is not a useful failure mode.
+            var membership = new WorkspaceMember
+            {
+                WorkspaceId = workspace.Id,
+                UserId = userId,
+                Role = WorkspaceRole.Owner
+            };
 
-        await db.SaveChangesAsync(ct);
+            db.Workspaces.Add(workspace);
+            db.WorkspaceMembers.Add(membership);
 
-        return ToResponse(workspace, WorkspaceRole.Owner);
+            audit.Record("workspace.create", nameof(Workspace), workspace.Id.ToString(),
+                organizationId: request.OrganizationId, workspaceId: workspace.Id);
+
+            return ToResponse(workspace, WorkspaceRole.Owner);
+        }, ct);
     }
 
     public async Task<WorkspaceResponse> UpdateAsync(Guid id, UpdateWorkspaceRequest request, CancellationToken ct)
@@ -175,6 +196,19 @@ public sealed class WorkspaceService(
             throw new ForbiddenException($"You cannot grant a role above your own ({actorRole}).");
         }
 
+        var organizationId = await db.Workspaces
+            .IgnoreQueryFilters()
+            .Where(w => w.Id == workspaceId)
+            .Select(w => w.OrganizationId)
+            .SingleAsync(ct);
+
+        // Workspace access is only ever granted inside the company that owns the workspace.
+        // Without this, an admin could attach an arbitrary account from another tenant.
+        if (!await IsActiveOrganizationMemberAsync(organizationId, request.UserId, ct))
+        {
+            throw new ForbiddenException("Only members of this workspace's organization can be added to it.");
+        }
+
         var existing = await db.WorkspaceMembers
             .IgnoreQueryFilters()
             .SingleOrDefaultAsync(m => m.WorkspaceId == workspaceId && m.UserId == request.UserId, ct);
@@ -197,12 +231,60 @@ public sealed class WorkspaceService(
             "workspace.member.add",
             nameof(WorkspaceMember),
             member.Id.ToString(),
-            metadataJson: $$"""{"userId":"{{request.UserId}}","role":"{{request.Role}}"}""");
+            metadataJson: $$"""{"userId":"{{request.UserId}}","role":"{{request.Role}}"}""",
+            organizationId: organizationId,
+            workspaceId: workspaceId);
 
         await db.SaveChangesAsync(ct);
 
         return new WorkspaceMemberResponse(member.Id, member.WorkspaceId, member.UserId, member.Role, member.CreatedAt);
     }
+
+    /// <summary>
+    /// Revokes a workspace grant. Tokens scoped to this workspace stop working on the next
+    /// request, since the session check re-reads membership. The last Owner cannot be removed.
+    /// </summary>
+    public async Task RemoveMemberAsync(Guid workspaceId, Guid memberId, CancellationToken ct)
+    {
+        var actorRole = await RequireRoleAsync(workspaceId, WorkspaceRole.Admin, ct);
+
+        var member = await db.WorkspaceMembers
+            .IgnoreQueryFilters()
+            .SingleOrDefaultAsync(m => m.Id == memberId && m.WorkspaceId == workspaceId, ct)
+            ?? throw new NotFoundException("Member", memberId);
+
+        if (member.Role > actorRole)
+        {
+            throw new ForbiddenException($"You cannot remove a member whose role is above your own ({actorRole}).");
+        }
+
+        if (member.Role == WorkspaceRole.Owner)
+        {
+            var otherOwners = await db.WorkspaceMembers.IgnoreQueryFilters().CountAsync(m =>
+                m.WorkspaceId == workspaceId && m.Id != memberId && m.Role == WorkspaceRole.Owner, ct);
+
+            if (otherOwners == 0)
+            {
+                throw new ConflictException("A workspace must keep at least one Owner.");
+            }
+        }
+
+        db.WorkspaceMembers.Remove(member);
+
+        audit.Record(
+            "workspace.member.remove",
+            nameof(WorkspaceMember),
+            member.Id.ToString(),
+            metadataJson: $$"""{"userId":"{{member.UserId}}","role":"{{member.Role}}"}""",
+            workspaceId: workspaceId);
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    private Task<bool> IsActiveOrganizationMemberAsync(Guid organizationId, Guid userId, CancellationToken ct) =>
+        db.OrganizationMembers.AnyAsync(m =>
+            m.OrganizationId == organizationId && m.UserId == userId && m.IsActive &&
+            db.Organizations.Any(o => o.Id == organizationId && o.IsActive), ct);
 
     /// <summary>
     /// Membership check that returns the caller's role, so callers get both the

@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY Directory.Build.props global.json ./
+COPY Directory.Build.props Directory.Packages.props global.json ./
 COPY src/Helios.Contracts/Helios.Contracts.csproj      src/Helios.Contracts/
 COPY src/Helios.Domain/Helios.Domain.csproj            src/Helios.Domain/
 COPY src/Helios.Application/Helios.Application.csproj  src/Helios.Application/

@@ -20,11 +20,16 @@ public sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
         builder.Property(a => a.ResourceId).HasMaxLength(100);
         builder.Property(a => a.DenyReason).HasMaxLength(500);
         builder.Property(a => a.IpAddress).HasMaxLength(45);
+        builder.Property(a => a.CorrelationId).HasMaxLength(64);
         builder.Property(a => a.Metadata).HasColumnType("json");
 
         builder.HasIndex(a => a.OccurredAt);
         builder.HasIndex(a => new { a.WorkspaceId, a.OccurredAt });
+        builder.HasIndex(a => new { a.OrganizationId, a.OccurredAt });
+
+        // Historical column kept for schema compatibility only; see HELIOS-REVIEW.md.
         builder.HasIndex(a => a.AgentRunId);
+        builder.HasIndex(a => a.CorrelationId);
 
         // Denied decisions are what a security review actually reads.
         builder.HasIndex(a => new { a.Allowed, a.OccurredAt });

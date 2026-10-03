@@ -18,5 +18,7 @@ public interface IAuditWriter
         string? resourceId = null,
         bool allowed = true,
         string? denyReason = null,
-        string? metadataJson = null);
+        string? metadataJson = null,
+        Guid? organizationId = null,
+        Guid? workspaceId = null);
 }

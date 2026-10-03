@@ -22,6 +22,428 @@ namespace Helios.Infrastructure.Persistence.MySql.Migrations
 
             MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
 
+            modelBuilder.Entity("Helios.Domain.ApiKeys.ApiKey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("DisplayPrefix")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("varchar(40)")
+                        .HasColumnName("display_prefix");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("environment");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("last_used_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("organization_id");
+
+                    b.Property<Guid?>("ProjectId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("project_id");
+
+                    b.Property<string>("PublicId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("public_id");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<Guid?>("RevokedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("revoked_by");
+
+                    b.Property<string>("Scopes")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("varchar(2000)")
+                        .HasColumnName("scopes");
+
+                    b.Property<byte[]>("SecretHash")
+                        .IsRequired()
+                        .HasColumnType("varbinary(32)")
+                        .HasColumnName("secret_hash");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("updated_by");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_api_keys");
+
+                    b.HasIndex("OrganizationId")
+                        .HasDatabaseName("ix_api_keys_organization_id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_api_keys_public_id");
+
+                    b.HasIndex("WorkspaceId", "CreatedAt")
+                        .HasDatabaseName("ix_api_keys_workspace_id_created_at");
+
+                    b.ToTable("api_keys", (string)null);
+                });
+
+            modelBuilder.Entity("Helios.Domain.Billing.BillingProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AddressLine1")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("address_line1");
+
+                    b.Property<string>("AddressLine2")
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("address_line2");
+
+                    b.Property<string>("BillingEmail")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("varchar(256)")
+                        .HasColumnName("billing_email");
+
+                    b.Property<string>("City")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("city");
+
+                    b.Property<string>("CountryCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("varchar(2)")
+                        .HasColumnName("country_code");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("varchar(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("LegalName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("legal_name");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("organization_id");
+
+                    b.Property<string>("PostalCode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("postal_code");
+
+                    b.Property<string>("Province")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("province");
+
+                    b.Property<string>("RegistrationNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("registration_number");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("updated_by");
+
+                    b.Property<string>("VatNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("vat_number");
+
+                    b.HasKey("Id")
+                        .HasName("pk_billing_profiles");
+
+                    b.HasIndex("OrganizationId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_billing_profiles_organization_id");
+
+                    b.ToTable("billing_profiles", (string)null);
+                });
+
+            modelBuilder.Entity("Helios.Domain.Catalogue.ApiProduct", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BillingUnit")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("billing_unit");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("CurrentVersion")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("current_version");
+
+                    b.Property<string>("Delivery")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("delivery");
+
+                    b.Property<string>("Limitations")
+                        .HasMaxLength(2000)
+                        .HasColumnType("varchar(2000)")
+                        .HasColumnName("limitations");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ReleaseState")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("release_state");
+
+                    b.Property<string>("Sensitivity")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("sensitivity");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("slug");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)")
+                        .HasColumnName("summary");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_api_products");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_api_products_slug");
+
+                    b.ToTable("api_products", (string)null);
+                });
+
+            modelBuilder.Entity("Helios.Domain.Catalogue.ApiProductVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("created_by");
+
+                    b.Property<int>("MaxInputBytes")
+                        .HasColumnType("int")
+                        .HasColumnName("max_input_bytes");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("product_id");
+
+                    b.Property<DateTimeOffset>("PublishedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("published_at");
+
+                    b.Property<string>("ReleaseState")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("release_state");
+
+                    b.Property<string>("RequestExample")
+                        .HasColumnType("json")
+                        .HasColumnName("request_example");
+
+                    b.Property<string>("RequestSchemaJson")
+                        .HasColumnType("json")
+                        .HasColumnName("request_schema_json");
+
+                    b.Property<string>("ResponseSchemaJson")
+                        .HasColumnType("json")
+                        .HasColumnName("response_schema_json");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("updated_by");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_api_product_versions");
+
+                    b.HasIndex("ProductId", "Version")
+                        .IsUnique()
+                        .HasDatabaseName("ix_api_product_versions_product_id_version");
+
+                    b.ToTable("api_product_versions", (string)null);
+                });
+
+            modelBuilder.Entity("Helios.Domain.Catalogue.Entitlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("environment");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("organization_id");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("product_id");
+
+                    b.Property<string>("Purpose")
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)")
+                        .HasColumnName("purpose");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("state");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Id")
+                        .HasName("pk_entitlements");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("ix_entitlements_product_id");
+
+                    b.HasIndex("OrganizationId", "ProductId", "Environment")
+                        .IsUnique()
+                        .HasDatabaseName("ix_entitlements_organization_id_product_id_environment");
+
+                    b.ToTable("entitlements", (string)null);
+                });
+
             modelBuilder.Entity("Helios.Domain.Identity.Organization", b =>
                 {
                     b.Property<Guid>("Id")
@@ -69,6 +491,60 @@ namespace Helios.Infrastructure.Persistence.MySql.Migrations
                         .HasDatabaseName("ix_organizations_slug");
 
                     b.ToTable("organizations", (string)null);
+                });
+
+            modelBuilder.Entity("Helios.Domain.Identity.OrganizationMember", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("created_by");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("organization_id");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("role");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("updated_by");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_organization_members");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_organization_members_user_id");
+
+                    b.HasIndex("OrganizationId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_organization_members_organization_id_user_id");
+
+                    b.ToTable("organization_members", (string)null);
                 });
 
             modelBuilder.Entity("Helios.Domain.Identity.Project", b =>
@@ -325,6 +801,11 @@ namespace Helios.Infrastructure.Persistence.MySql.Migrations
                         .HasColumnType("tinyint(1)")
                         .HasColumnName("allowed");
 
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("correlation_id");
+
                     b.Property<string>("DenyReason")
                         .HasMaxLength(500)
                         .HasColumnType("varchar(500)")
@@ -342,6 +823,10 @@ namespace Helios.Infrastructure.Persistence.MySql.Migrations
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("datetime(6)")
                         .HasColumnName("occurred_at");
+
+                    b.Property<Guid?>("OrganizationId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("organization_id");
 
                     b.Property<string>("ResourceId")
                         .HasMaxLength(100)
@@ -364,11 +849,17 @@ namespace Helios.Infrastructure.Persistence.MySql.Migrations
                     b.HasIndex("AgentRunId")
                         .HasDatabaseName("ix_audit_logs_agent_run_id");
 
+                    b.HasIndex("CorrelationId")
+                        .HasDatabaseName("ix_audit_logs_correlation_id");
+
                     b.HasIndex("OccurredAt")
                         .HasDatabaseName("ix_audit_logs_occurred_at");
 
                     b.HasIndex("Allowed", "OccurredAt")
                         .HasDatabaseName("ix_audit_logs_allowed_occurred_at");
+
+                    b.HasIndex("OrganizationId", "OccurredAt")
+                        .HasDatabaseName("ix_audit_logs_organization_id_occurred_at");
 
                     b.HasIndex("WorkspaceId", "OccurredAt")
                         .HasDatabaseName("ix_audit_logs_workspace_id_occurred_at");
@@ -485,6 +976,156 @@ namespace Helios.Infrastructure.Persistence.MySql.Migrations
                         .HasDatabaseName("ix_stored_objects_workspace_id");
 
                     b.ToTable("stored_objects", (string)null);
+                });
+
+            modelBuilder.Entity("Helios.Domain.Requests.ApiRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<Guid?>("ApiKeyId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("api_key_id");
+
+                    b.Property<decimal>("BillingAmount")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)")
+                        .HasColumnName("billing_amount");
+
+                    b.Property<string>("BillingState")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("billing_state");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("channel");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("completed_at");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("varchar(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("Environment")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("environment");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("error_code");
+
+                    b.Property<string>("FingerprintKeyId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("fingerprint_key_id");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("organization_id");
+
+                    b.Property<string>("PayloadFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("payload_fingerprint");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("product_id");
+
+                    b.Property<string>("ProductSlug")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("product_slug");
+
+                    b.Property<string>("ProductVersion")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("product_version");
+
+                    b.Property<DateTimeOffset?>("ResultExpiresAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("result_expires_at");
+
+                    b.Property<string>("ResultJson")
+                        .HasColumnType("json")
+                        .HasColumnName("result_json");
+
+                    b.Property<bool>("ReviewRequired")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("review_required");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("UsageQuantity")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("decimal(18,6)")
+                        .HasColumnName("usage_quantity");
+
+                    b.Property<string>("UsageUnit")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("usage_unit");
+
+                    b.Property<string>("WarningsJson")
+                        .HasColumnType("json")
+                        .HasColumnName("warnings_json");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("binary(16)")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_api_requests");
+
+                    b.HasIndex("ApiKeyId")
+                        .HasDatabaseName("ix_api_requests_api_key_id");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("ix_api_requests_product_id");
+
+                    b.HasIndex("WorkspaceId", "CreatedAt")
+                        .HasDatabaseName("ix_api_requests_workspace_id_created_at");
+
+                    b.HasIndex("OrganizationId", "Environment", "ProductSlug", "ProductVersion", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ix_api_requests_organization_id_environment_product_slug_produc~");
+
+                    b.ToTable("api_requests", (string)null);
                 });
 
             modelBuilder.Entity("Helios.Infrastructure.Persistence.MySql.Identity.HeliosRole", b =>
@@ -750,6 +1391,72 @@ namespace Helios.Infrastructure.Persistence.MySql.Migrations
                     b.ToTable("user_tokens", (string)null);
                 });
 
+            modelBuilder.Entity("Helios.Domain.ApiKeys.ApiKey", b =>
+                {
+                    b.HasOne("Helios.Domain.Identity.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_api_keys_organizations_organization_id");
+
+                    b.HasOne("Helios.Domain.Identity.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_api_keys_workspaces_workspace_id");
+                });
+
+            modelBuilder.Entity("Helios.Domain.Billing.BillingProfile", b =>
+                {
+                    b.HasOne("Helios.Domain.Identity.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_billing_profiles_organizations_organization_id");
+                });
+
+            modelBuilder.Entity("Helios.Domain.Catalogue.ApiProductVersion", b =>
+                {
+                    b.HasOne("Helios.Domain.Catalogue.ApiProduct", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_api_product_versions_api_products_product_id");
+                });
+
+            modelBuilder.Entity("Helios.Domain.Catalogue.Entitlement", b =>
+                {
+                    b.HasOne("Helios.Domain.Identity.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_entitlements_organizations_organization_id");
+
+                    b.HasOne("Helios.Domain.Catalogue.ApiProduct", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_entitlements_api_products_product_id");
+                });
+
+            modelBuilder.Entity("Helios.Domain.Identity.OrganizationMember", b =>
+                {
+                    b.HasOne("Helios.Domain.Identity.Organization", "Organization")
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_organization_members_organizations_organization_id");
+
+                    b.Navigation("Organization");
+                });
+
             modelBuilder.Entity("Helios.Domain.Identity.ProjectMember", b =>
                 {
                     b.HasOne("Helios.Domain.Identity.Project", "Project")
@@ -782,6 +1489,30 @@ namespace Helios.Infrastructure.Persistence.MySql.Migrations
                         .HasConstraintName("fk_workspace_members_workspaces_workspace_id");
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Helios.Domain.Requests.ApiRequest", b =>
+                {
+                    b.HasOne("Helios.Domain.Identity.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_api_requests_organizations_organization_id");
+
+                    b.HasOne("Helios.Domain.Catalogue.ApiProduct", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_api_requests_api_products_product_id");
+
+                    b.HasOne("Helios.Domain.Identity.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_api_requests_workspaces_workspace_id");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

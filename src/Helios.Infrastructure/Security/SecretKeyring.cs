@@ -124,6 +124,20 @@ public sealed class SecretKeyring
         return new SealedSecret(ActiveKeyId, envelope);
     }
 
+    /// <summary>
+    /// A purpose-bound subkey derived with HKDF-SHA256, so one master key can serve sealing and
+    /// keyed hashing without the same key material ever being used for both.
+    /// </summary>
+    public byte[] DeriveSubkey(string keyId, string purpose)
+    {
+        if (!_keys.TryGetValue(keyId, out var key))
+        {
+            throw new InvalidOperationException($"Secret key '{keyId}' is not configured.");
+        }
+
+        return HKDF.DeriveKey(HashAlgorithmName.SHA256, key, KeySizeBytes, salt: [], info: Encoding.UTF8.GetBytes(purpose));
+    }
+
     /// <summary>Opens a sealed envelope. Throws if the wrapping key is gone or the row was tampered with.</summary>
     public string Unprotect(string keyId, byte[] envelope)
     {

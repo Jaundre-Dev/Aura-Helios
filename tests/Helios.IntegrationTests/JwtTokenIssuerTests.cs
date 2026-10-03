@@ -32,7 +32,7 @@ public sealed class JwtTokenIssuerTests
         var userId = Guid.CreateVersion7();
         var workspaceId = Guid.CreateVersion7();
 
-        var auth = Issuer().Issue(userId, "ada@helios.test", "Ada", workspaceId, WorkspaceRole.Admin);
+        var auth = Issuer().Issue(userId, "ada@helios.test", "Ada", "stamp-1", workspaceId, WorkspaceRole.Admin);
 
         var principal = Validate(auth.AccessToken);
 
@@ -45,7 +45,7 @@ public sealed class JwtTokenIssuerTests
     [Fact]
     public void A_workspaceless_token_omits_the_workspace_and_role_claims()
     {
-        var auth = Issuer().Issue(Guid.CreateVersion7(), "no-ws@helios.test", null, null, null);
+        var auth = Issuer().Issue(Guid.CreateVersion7(), "no-ws@helios.test", null, "stamp-1", null, null);
 
         var principal = Validate(auth.AccessToken);
 
@@ -56,7 +56,7 @@ public sealed class JwtTokenIssuerTests
     [Fact]
     public void A_token_signed_with_another_key_is_rejected()
     {
-        var auth = Issuer().Issue(Guid.CreateVersion7(), "ada@helios.test", null, null, null);
+        var auth = Issuer().Issue(Guid.CreateVersion7(), "ada@helios.test", null, "stamp-1", null, null);
 
         var wrongKey = new TokenValidationParameters
         {

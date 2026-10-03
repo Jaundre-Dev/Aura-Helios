@@ -75,6 +75,22 @@ public static class WorkspaceEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status409Conflict);
 
+        group.MapDelete("/{id:guid}/members/{memberId:guid}", async (
+                Guid id,
+                Guid memberId,
+                WorkspaceService service,
+                CancellationToken ct) =>
+            {
+                await service.RemoveMemberAsync(id, memberId, ct);
+
+                return Results.NoContent();
+            })
+            .WithName("RemoveWorkspaceMember")
+            .WithSummary("Revokes access. Tokens scoped to this workspace stop working on the next request.")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
         return app;
     }
 }

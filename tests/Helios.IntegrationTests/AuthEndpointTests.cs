@@ -114,11 +114,7 @@ public sealed class AuthEndpointTests(HeliosApiFactory factory)
     [Fact]
     public async Task A_protected_endpoint_rejects_an_unauthenticated_caller()
     {
-        // No user on the context — the test auth handler returns no result, so the
-        // RequireAuthorization gate challenges with 401.
-        _factory.Context.UserId = null;
-        _factory.Context.WorkspaceId = null;
-
+        // No bearer token: the RequireAuthorization gate challenges with 401.
         var client = _factory.CreateClient();
 
         var response = await client.GetAsync("/api/v1/workspaces");

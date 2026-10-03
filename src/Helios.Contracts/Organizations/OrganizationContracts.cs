@@ -7,4 +7,19 @@ public sealed record OrganizationResponse(
     string Name,
     string Slug,
     bool IsActive,
+    DateTimeOffset CreatedAt,
+    OrganizationRole? MyRole = null);
+
+public sealed record AddOrganizationMemberRequest(string Email, OrganizationRole Role);
+
+public sealed record UpdateOrganizationMemberRequest(OrganizationRole Role);
+
+public sealed record OrganizationMemberResponse(
+    Guid Id,
+    Guid OrganizationId,
+    Guid UserId,
+    string? Email,
+    string? DisplayName,
+    OrganizationRole Role,
+    bool IsActive,
     DateTimeOffset CreatedAt);

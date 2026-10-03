@@ -48,14 +48,17 @@ public static class InfrastructureServiceCollectionExtensions
         });
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+        services.AddScoped<IRowLocks, MySqlRowLocks>();
         services.AddScoped<IHeliosDbContext>(sp => sp.GetRequiredService<HeliosDbContext>());
         services.AddScoped<IAuditWriter, AuditWriter>();
+        services.AddScoped<IUserDirectory, UserDirectory>();
 
         // Built from the fully-merged configuration on first resolution, so a missing or malformed
         // key fails before any secret is written — never with a corrupted value — rather than being
         // read from a half-built configuration at registration time.
         services.AddSingleton(sp => SecretKeyring.FromConfiguration(sp.GetRequiredService<IConfiguration>()));
         services.AddScoped<ISecretStore, MySqlSecretStore>();
+        services.AddSingleton<IRequestFingerprinter, HmacRequestFingerprinter>();
 
         // Tenant-scoped object storage for run outputs and uploads (WP0.7).
         services.AddScoped<IObjectStore, MySqlObjectStore>();
@@ -79,6 +82,7 @@ public static class InfrastructureServiceCollectionExtensions
                 options.Password.RequireUppercase = true;
                 options.Password.RequireNonAlphanumeric = false;
 
+                options.Lockout.AllowedForNewUsers = true;
                 options.Lockout.MaxFailedAccessAttempts = 5;
                 options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
             })

@@ -4,14 +4,22 @@ using Helios.Api.Middleware;
 using Helios.Api.Security;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.DependencyInjection;
+using Helios.Application.Features.Requests;
 using Helios.Infrastructure.DependencyInjection;
 using Helios.Infrastructure.Persistence.MySql;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddOpenApi();
-builder.Services.AddProblemDetails();
+
+// Every error response carries the request id, so a customer can quote it to support and it
+// lines up with the audit trail's correlation id.
+builder.Services.AddProblemDetails(options =>
+    options.CustomizeProblemDetails = context =>
+        context.ProblemDetails.Extensions["requestId"] = context.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<HeliosExceptionHandler>();
+builder.Services.AddHeliosRateLimiting(builder.Configuration);
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IWorkspaceContext, HttpWorkspaceContext>();
@@ -20,6 +28,25 @@ builder.Services.AddHeliosPersistence(builder.Configuration);
 builder.Services.AddHeliosIdentity();
 builder.Services.AddHeliosAuthentication(builder.Configuration);
 builder.Services.AddHeliosApplication();
+
+// Result payloads are personal data for most products; keep them only as long as configured.
+builder.Services.AddSingleton(new RequestRetentionPolicy(
+    TimeSpan.FromDays(builder.Configuration.GetValue("Helios:Requests:ResultRetentionDays", 30))));
+
+// Trust X-Forwarded-For only from explicitly listed reverse proxies. Without this the rate
+// limiter and audit trail see the proxy's address; trusting any sender would let a client
+// forge its own address and dodge throttling.
+var knownProxies = builder.Configuration.GetSection("Helios:ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+    foreach (var proxy in knownProxies.Where(p => !string.IsNullOrWhiteSpace(p)))
+    {
+        options.KnownProxies.Add(System.Net.IPAddress.Parse(proxy));
+    }
+});
 
 builder.Services.AddCors(options =>
 {
@@ -37,11 +64,14 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseForwardedHeaders();
+app.UseMiddleware<RequestCorrelationMiddleware>();
 app.UseExceptionHandler();
 app.UseCors("helios-web");
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 // Liveness: the process is up. Deliberately touches nothing else, so a database outage
 // never causes the orchestrator to kill an otherwise healthy container.
@@ -63,6 +93,7 @@ app.MapAuthEndpoints();
 app.MapOrganizationEndpoints();
 app.MapWorkspaceEndpoints();
 app.MapProjectEndpoints();
+app.MapPlatformEndpoints();
 
 app.Run();
 

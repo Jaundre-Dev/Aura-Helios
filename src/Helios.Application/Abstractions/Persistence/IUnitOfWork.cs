@@ -5,5 +5,11 @@ public interface IUnitOfWork
 {
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 
-    Task<IAsyncDisposable> BeginTransactionAsync(CancellationToken cancellationToken);
+    /// <summary>
+    /// Runs <paramref name="work"/> in one database transaction and commits it when the delegate
+    /// returns. Any exception rolls the whole unit back. Runs under the configured execution
+    /// strategy, so a transient failure may run the delegate again from the start: stage every
+    /// change inside it and keep side effects outside the database out of it.
+    /// </summary>
+    Task<T> ExecuteInTransactionAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken cancellationToken);
 }

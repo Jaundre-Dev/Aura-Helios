@@ -24,10 +24,14 @@ public sealed class HttpWorkspaceContext(IHttpContextAccessor accessor) : IWorks
 
     public Guid? WorkspaceId => ReadGuid(HeliosClaims.Workspace);
 
+    public Guid? ApiKeyId => ReadGuid(HeliosClaims.ApiKey);
+
     public bool IsSystem => false;
 
     public string? IpAddress =>
         accessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+
+    public string? CorrelationId => accessor.HttpContext?.TraceIdentifier;
 
     private Guid? ReadGuid(string claimType)
     {

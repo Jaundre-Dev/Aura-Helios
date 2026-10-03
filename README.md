@@ -12,14 +12,20 @@ South African business API platform: companies register, select services, receiv
 
 ## Current state
 
-This is a retained .NET 10 / React / MySQL foundation, not a working paid API platform. Identity, workspace/project, audit, encrypted secret storage and database object-storage implementations remain. They need the security and operational repairs in phase P0 before use with customers. Catalogue, keys, billing, durable jobs and service execution are not implemented. The frontend is an explicitly labelled placeholder shell.
+Not yet a paid API platform. The backend now has company membership and roles, hardened sign-in (lockout, throttling, session revocation), an honest 12-service catalogue, sandbox entitlements, hashed scoped API keys, durable request records with idempotency, and one callable sandbox product: `identity.sa-id-validate` (format and checksum only, not identity verification). Billing, jobs, payments, webhooks, document products and partner verification are not implemented. The frontend is still a labelled placeholder shell. See [implementation status](docs/IMPLEMENTATION-STATUS.md) for exactly what was verified and how.
 
-The former AI engineering/agent product and its delivery plans have been retired. Git history preserves the previous source. Database migration history is deliberately retained; no database cleanup has been run. Other AURA products are outside this repository's scope.
+The former AI engineering/agent product and its delivery plans have been retired. Git history preserves the previous source. Database migration history is deliberately retained; schema changes are forward migrations. Other AURA products are outside this repository's scope.
 
 ## Toolchain
 
-The repository requests .NET SDK 10.0.303 through global.json. During this review only 10.0.302 was installed, so the SDK resolver blocked the build. Resolve this deliberately in P0. Preserve the existing EF/Pomelo compatible versions until reviewed together.
+- .NET SDK: `global.json` requests 10.0.303 with `latestFeature` roll-forward; 10.0.401 builds it. Preserve the EF Core 9 / Pomelo pins until reviewed together.
+- Frontend: Node.js LTS and npm. A `package-lock.json` has not been generated yet; `npm ci` (used by the web Dockerfile) needs one.
+- Schema: `deploy/sql/helios-migrations.idempotent.sql` applies every migration safely to any existing HELIOS database; regenerate it with `dotnet ef migrations script --idempotent` after adding a migration.
 
-The frontend uses Node and npm; package.json defines build and typecheck. Establish and commit a reproducible lockfile before CI. Database integration tests currently recreate a fixed helios_test database; replace this fixture with a unique disposable schema before running integration tests. Do not point tests at a customer or development database.
+## Tests
 
-See HELIOS-REVIEW.md for the exact verification status; earlier test counts are not current evidence.
+```bash
+dotnet test Helios.sln
+```
+
+Integration tests need a local MySQL. They read only host, port and credentials from `HELIOS_TEST_CONNECTION` (or the Helios.Api user-secrets `ConnectionStrings:MySql`), create their own `helios_it_<timestamp>_<random>` database, and drop only that database afterwards. Non-local hosts are refused unless `HELIOS_TEST_ALLOW_REMOTE_HOST=1`. Never point them at a customer database.

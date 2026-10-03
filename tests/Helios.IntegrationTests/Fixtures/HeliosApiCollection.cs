@@ -1,10 +1,9 @@
 namespace Helios.IntegrationTests.Fixtures;
 
 /// <summary>
-/// One shared API + database for every integration test class. Collection fixtures run the
-/// classes serially, which matters here: <see cref="HeliosApiFactory"/> drops and recreates
-/// the <c>helios_test</c> schema, so two classes initialising it in parallel would corrupt
-/// each other's run.
+/// One shared API and disposable database for every integration test class in a run. Each run
+/// gets its own uniquely named database, so concurrent runs no longer collide; within a run the
+/// classes share it and isolate themselves with fresh accounts and companies per test.
 /// </summary>
 [CollectionDefinition(Name)]
 public sealed class HeliosApiCollection : ICollectionFixture<HeliosApiFactory>

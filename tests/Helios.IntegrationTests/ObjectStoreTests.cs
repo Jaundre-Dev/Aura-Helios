@@ -17,13 +17,10 @@ public sealed class ObjectStoreTests(HeliosApiFactory factory)
 {
     private readonly HeliosApiFactory _factory = factory;
 
-    private IServiceScope ScopeFor(Guid workspaceId, bool isSystem = false)
-    {
-        _factory.Context.UserId = isSystem ? null : Guid.CreateVersion7();
-        _factory.Context.WorkspaceId = isSystem ? null : workspaceId;
-        _factory.Context.IsSystem = isSystem;
-        return _factory.Services.CreateScope();
-    }
+    private IServiceScope ScopeFor(Guid workspaceId, bool isSystem = false) =>
+        isSystem
+            ? _factory.CreateSystemScope()
+            : _factory.CreateScopeAs(Guid.CreateVersion7(), workspaceId);
 
     private static ObjectToStore Report(string body) =>
         new("review-report.md", "text/markdown", Encoding.UTF8.GetBytes(body));

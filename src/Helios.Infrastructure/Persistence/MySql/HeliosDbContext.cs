@@ -1,7 +1,11 @@
 using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Abstractions.Security;
+using Helios.Domain.ApiKeys;
+using Helios.Domain.Billing;
+using Helios.Domain.Catalogue;
 using Helios.Domain.Identity;
 using Helios.Domain.Platform;
+using Helios.Domain.Requests;
 using Helios.Infrastructure.Persistence.MySql.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -21,6 +25,7 @@ public class HeliosDbContext(
     private readonly IWorkspaceContext _workspaceContext = workspaceContext;
 
     public DbSet<Organization> Organizations => Set<Organization>();
+    public DbSet<OrganizationMember> OrganizationMembers => Set<OrganizationMember>();
     public DbSet<Workspace> Workspaces => Set<Workspace>();
     public DbSet<WorkspaceMember> WorkspaceMembers => Set<WorkspaceMember>();
     public DbSet<Project> Projects => Set<Project>();
@@ -28,6 +33,12 @@ public class HeliosDbContext(
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<Secret> Secrets => Set<Secret>();
     public DbSet<StoredObject> StoredObjects => Set<StoredObject>();
+    public DbSet<ApiProduct> ApiProducts => Set<ApiProduct>();
+    public DbSet<ApiProductVersion> ApiProductVersions => Set<ApiProductVersion>();
+    public DbSet<Entitlement> Entitlements => Set<Entitlement>();
+    public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+    public DbSet<ApiRequest> ApiRequests => Set<ApiRequest>();
+    public DbSet<BillingProfile> BillingProfiles => Set<BillingProfile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -89,5 +100,13 @@ public class HeliosDbContext(
         // tenant resolves to nothing in another.
         modelBuilder.Entity<StoredObject>()
             .HasQueryFilter(o => _workspaceContext.IsSystem || o.WorkspaceId == _workspaceContext.WorkspaceId);
+
+        // Keys and requests belong to a workspace. Key authentication must find a key before any
+        // workspace is known, so it alone reads keys with IgnoreQueryFilters, by public id.
+        modelBuilder.Entity<ApiKey>()
+            .HasQueryFilter(k => _workspaceContext.IsSystem || k.WorkspaceId == _workspaceContext.WorkspaceId);
+
+        modelBuilder.Entity<ApiRequest>()
+            .HasQueryFilter(r => _workspaceContext.IsSystem || r.WorkspaceId == _workspaceContext.WorkspaceId);
     }
 }

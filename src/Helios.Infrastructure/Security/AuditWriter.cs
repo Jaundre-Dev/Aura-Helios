@@ -20,20 +20,26 @@ public sealed class AuditWriter(
         string? resourceId = null,
         bool allowed = true,
         string? denyReason = null,
-        string? metadataJson = null)
+        string? metadataJson = null,
+        Guid? organizationId = null,
+        Guid? workspaceId = null)
     {
         db.AuditLogs.Add(new AuditLog
         {
             OccurredAt = timeProvider.GetUtcNow(),
             ActorUserId = context.UserId,
-            WorkspaceId = context.WorkspaceId,
+            // An explicit workspace wins: an action can concern a workspace other than the one
+            // the caller's token is currently scoped to (creating one, for instance).
+            WorkspaceId = workspaceId ?? context.WorkspaceId,
+            OrganizationId = organizationId,
             Action = action,
             ResourceType = resourceType,
             ResourceId = resourceId,
             Allowed = allowed,
             DenyReason = denyReason,
             Metadata = metadataJson,
-            IpAddress = context.IpAddress
+            IpAddress = context.IpAddress,
+            CorrelationId = context.CorrelationId
         });
     }
 }

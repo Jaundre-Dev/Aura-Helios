@@ -18,14 +18,11 @@ public sealed class SecretStoreTests(HeliosApiFactory factory)
 {
     private readonly HeliosApiFactory _factory = factory;
 
-    /// <summary>Points the shared context at a workspace and hands back a scope resolved under it.</summary>
-    private IServiceScope ScopeFor(Guid workspaceId, bool isSystem = false)
-    {
-        _factory.Context.UserId = isSystem ? null : Guid.CreateVersion7();
-        _factory.Context.WorkspaceId = isSystem ? null : workspaceId;
-        _factory.Context.IsSystem = isSystem;
-        return _factory.Services.CreateScope();
-    }
+    /// <summary>A scope resolved as a user acting in the given workspace.</summary>
+    private IServiceScope ScopeFor(Guid workspaceId, bool isSystem = false) =>
+        isSystem
+            ? _factory.CreateSystemScope()
+            : _factory.CreateScopeAs(Guid.CreateVersion7(), workspaceId);
 
     [Fact]
     public async Task Set_then_get_returns_the_plaintext()

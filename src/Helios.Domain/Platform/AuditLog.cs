@@ -11,6 +11,12 @@ public class AuditLog : Entity
     public Guid? AgentRunId { get; set; }
     public Guid? WorkspaceId { get; set; }
 
+    /// <summary>The customer company the action concerned, when known.</summary>
+    public Guid? OrganizationId { get; set; }
+
+    /// <summary>The HTTP request or job that caused this entry, so one action can be traced end to end.</summary>
+    public string? CorrelationId { get; set; }
+
     public required string Action { get; set; }
     public required string ResourceType { get; set; }
     public string? ResourceId { get; set; }

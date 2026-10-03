@@ -11,6 +11,9 @@ public interface IWorkspaceContext
 
     Guid? WorkspaceId { get; }
 
+    /// <summary>The API key authenticating this request, when the caller is a machine rather than a user.</summary>
+    Guid? ApiKeyId { get; }
+
     /// <summary>True for the worker and for migrations, where no user is acting.</summary>
     bool IsSystem { get; }
 
@@ -20,4 +23,7 @@ public interface IWorkspaceContext
     /// ASP.NET Core just to record who called.
     /// </summary>
     string? IpAddress { get; }
+
+    /// <summary>Identifier of the request or job being served, recorded on audit rows.</summary>
+    string? CorrelationId { get; }
 }

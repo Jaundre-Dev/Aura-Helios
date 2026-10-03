@@ -13,4 +13,19 @@ public static class HeliosClaims
     public const string Name = "name";
     public const string Workspace = "workspace_id";
     public const string Role = "role";
+
+    /// <summary>
+    /// The account's security stamp when the token was issued. Rotating the stamp (password
+    /// change, "sign out everywhere") invalidates every token carrying the old value.
+    /// </summary>
+    public const string SecurityStamp = "sst";
+
+    /// <summary>Set only on API-key principals: the authenticating key's id.</summary>
+    public const string ApiKey = "api_key_id";
+
+    /// <summary>Set only on API-key principals: the key's owning company.</summary>
+    public const string Organization = "organization_id";
+
+    /// <summary>Set only on API-key principals: <c>Sandbox</c> or <c>Live</c>.</summary>
+    public const string Environment = "environment";
 }

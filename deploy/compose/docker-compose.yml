@@ -1,5 +1,21 @@
 name: helios
 
+# Full local stack: MySQL, Redis, schema migration, API, worker and web client.
+# Development only — not a production deployment. Copy .env.example to .env first; the
+# required variables below fail fast with a message when missing.
+#
+#   docker compose up --build
+#
+# AI runtimes (Ollama/vLLM) are not part of the default stack: no live product depends on
+# them, and self-hosted model use needs licence and hardware review (plan section 10).
+
+x-helios-database: &helios-database
+  ConnectionStrings__MySql: "Server=mysql;Port=3306;Database=${MYSQL_DATABASE:?set MYSQL_DATABASE};User=${MYSQL_USER:?set MYSQL_USER};Password=${MYSQL_PASSWORD:?set MYSQL_PASSWORD};"
+  ConnectionStrings__Redis: "redis:6379"
+  Helios__Database__ServerVersion: "8.4.0"
+  Helios__Secrets__ActiveKeyId: "${HELIOS_SECRETS_ACTIVE_KEY_ID:-k1}"
+  Helios__Secrets__Keys__k1: "${HELIOS_SECRETS_KEY_K1:?set HELIOS_SECRETS_KEY_K1 to base64 of 32 random bytes}"
+
 services:
   helios-api:
     build:
@@ -8,15 +24,14 @@ services:
     ports:
       - "5080:8080"
     environment:
+      <<: *helios-database
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
-      ConnectionStrings__MySql: "Server=mysql;Port=3306;Database=${MYSQL_DATABASE};User=${MYSQL_USER};Password=${MYSQL_PASSWORD};"
-      ConnectionStrings__Redis: "redis:6379"
       Helios__WebUrl: "http://localhost:5173"
-      Providers__Ollama__BaseUrl: "http://ollama:11434"
+      Helios__Jwt__SigningKey: "${HELIOS_JWT_SIGNING_KEY:?set HELIOS_JWT_SIGNING_KEY (32+ characters)}"
     depends_on:
-      mysql:
-        condition: service_healthy
+      helios-migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
@@ -25,13 +40,11 @@ services:
       context: ../..
       dockerfile: deploy/docker/Dockerfile.worker
     environment:
+      <<: *helios-database
       DOTNET_ENVIRONMENT: Development
-      ConnectionStrings__MySql: "Server=mysql;Port=3306;Database=${MYSQL_DATABASE};User=${MYSQL_USER};Password=${MYSQL_PASSWORD};"
-      ConnectionStrings__Redis: "redis:6379"
-      Providers__Ollama__BaseUrl: "http://ollama:11434"
     depends_on:
-      mysql:
-        condition: service_healthy
+      helios-migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
@@ -44,20 +57,36 @@ services:
     depends_on:
       - helios-api
 
+  # Applies the idempotent schema script generated from the EF migrations. Safe to re-run:
+  # each migration checks the history table and applies only once. Never drops data.
+  helios-migrate:
+    image: mysql:8.4
+    restart: "no"
+    volumes:
+      - ../sql:/sql:ro
+    environment:
+      MYSQL_PWD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+    entrypoint: ["sh", "-c"]
+    command:
+      - mysql -h mysql -u "${MYSQL_USER}" "${MYSQL_DATABASE}" < /sql/helios-migrations.idempotent.sql
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   mysql:
     image: mysql:8.4
-    command: --default-authentication-plugin=caching_sha2_password
+    # MySQL 8.4 removed default_authentication_plugin; caching_sha2_password is the default.
     ports:
-      - "3306:3306"
+      - "${MYSQL_HOST_PORT:-3307}:3306"
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?set MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER:?set MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -66,7 +95,7 @@ services:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
-      - "6379:6379"
+      - "${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -75,31 +104,6 @@ services:
       timeout: 3s
       retries: 12
 
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-models:/root/.ollama
-
-  # GPU required. Start with: docker compose --profile gpu up
-  vllm:
-    image: vllm/vllm-openai:latest
-    profiles: ["gpu"]
-    ports:
-      - "8000:8000"
-    volumes:
-      - vllm-models:/root/.cache/huggingface
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
 volumes:
   mysql-data:
   redis-data:
-  ollama-models:
-  vllm-models:

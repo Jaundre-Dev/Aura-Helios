@@ -11,6 +11,8 @@ public sealed class SystemWorkspaceContext : IWorkspaceContext
 {
     public Guid? UserId => null;
     public Guid? WorkspaceId => null;
+    public Guid? ApiKeyId => null;
     public bool IsSystem => true;
     public string? IpAddress => null;
+    public string? CorrelationId => null;
 }

@@ -1,202 +1,125 @@
-using System.Security.Claims;
-using System.Text.Encodings.Web;
-using Helios.Api.Security;
+using Helios.Api.Configuration;
 using Helios.Application.Abstractions.Security;
 using Helios.Infrastructure.Persistence.MySql;
 using Helios.Infrastructure.Persistence.MySql.Interceptors;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using MySqlConnector;
 
 namespace Helios.IntegrationTests.Fixtures;
 
 /// <summary>
-/// Authenticates every request from the <see cref="TestWorkspaceContext"/> the test set on
-/// the fixture, so <c>RequireAuthorization</c> is satisfied without minting a real JWT per
-/// call. The real JWT pipeline is covered separately by <c>AuthEndpointTests</c> and the
-/// token-issuer unit tests; these endpoint tests are about isolation and RBAC, not signing.
+/// An identity for code that runs outside an HTTP request in a test — the stores, for instance.
+/// Set on one service scope only (see <see cref="HeliosApiFactory.CreateScopeAs"/>), so it can
+/// never leak into a request: HTTP calls always resolve the real <see cref="HttpWorkspaceContext"/>.
 /// </summary>
-public sealed class TestAuthHandler(
-    IWorkspaceContext workspaceContext,
-    IOptionsMonitor<AuthenticationSchemeOptions> options,
-    ILoggerFactory logger,
-    UrlEncoder encoder)
-    : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
-{
-    public const string SchemeName = "Test";
-
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
-    {
-        // No user set on the context means an anonymous client — let the challenge return
-        // 401, which is what an unauthenticated caller should see.
-        if (workspaceContext.UserId is not { } userId)
-        {
-            return Task.FromResult(AuthenticateResult.NoResult());
-        }
-
-        var claims = new List<Claim> { new(HeliosClaims.Subject, userId.ToString()) };
-
-        if (workspaceContext.WorkspaceId is { } workspaceId)
-        {
-            claims.Add(new Claim(HeliosClaims.Workspace, workspaceId.ToString()));
-        }
-
-        var identity = new ClaimsIdentity(claims, SchemeName, HeliosClaims.Subject, HeliosClaims.Role);
-        var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);
-
-        return Task.FromResult(AuthenticateResult.Success(ticket));
-    }
-}
-
-/// <summary>
-/// Identity for a test run. Replaces <see cref="IWorkspaceContext"/> in the container so
-/// the endpoints can be exercised before WP0.4 delivers real authentication.
-/// </summary>
-/// <remarks>
-/// A test-only seam, not a development backdoor. Nothing in the API can select it, so no
-/// configuration or header makes production skip authentication.
-/// </remarks>
 public sealed class TestWorkspaceContext : IWorkspaceContext
 {
-    public Guid? UserId { get; set; }
-    public Guid? WorkspaceId { get; set; }
-    public bool IsSystem { get; set; }
+    public Guid? UserId { get; init; }
+    public Guid? WorkspaceId { get; init; }
+    public Guid? ApiKeyId => null;
+    public bool IsSystem { get; init; }
     public string? IpAddress => "127.0.0.1";
+    public string? CorrelationId => "test";
+}
+
+/// <summary>Scoped holder for an optional per-scope identity override.</summary>
+public sealed class TestScopeIdentity
+{
+    public IWorkspaceContext? Override { get; set; }
 }
 
 /// <summary>
-/// Boots the real API against a real MySQL schema. Testcontainers is the plan's target
-/// once Docker is installed; until then this uses the native MySQL already on the machine
-/// and a throwaway database.
+/// Boots the real API — real JWT authentication, real session checks — against a disposable,
+/// uniquely named MySQL database created for this run and dropped afterwards. See
+/// <see cref="DisposableTestDatabase"/> for the safeguards.
 /// </summary>
 public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    /// <summary>
-    /// The only database these tests may touch. Enforced twice below, because this
-    /// fixture calls <c>EnsureDeleted</c> and an earlier version of it dropped the
-    /// developer's real schema when configuration precedence put the app's own
-    /// user-secrets ahead of the test override.
-    /// </summary>
-    private const string TestDatabase = "helios_test";
+    public const string SigningKey = "integration-tests-signing-key-not-a-real-secret";
 
-    public TestWorkspaceContext Context { get; } = new();
+    private readonly DisposableTestDatabase _database = DisposableTestDatabase.FromEnvironment();
 
-    /// <summary>
-    /// Reads the developer's connection string for its credentials and host, then
-    /// replaces the database name outright rather than by string substitution — a
-    /// substitution only works if the original happens to be named what you expected.
-    /// </summary>
-    private static string BuildTestConnectionString()
-    {
-        var configuration = new ConfigurationBuilder()
-            .AddUserSecrets<Program>(optional: true)
-            .AddEnvironmentVariables()
-            .Build();
-
-        var source =
-            Environment.GetEnvironmentVariable("HELIOS_TEST_CONNECTION")
-            ?? configuration.GetConnectionString("MySql")
-            ?? throw new InvalidOperationException(
-                "No connection string for integration tests. Set HELIOS_TEST_CONNECTION, or " +
-                "ConnectionStrings:MySql in the Helios.Api user-secrets.");
-
-        return new MySqlConnectionStringBuilder(source)
-        {
-            Database = TestDatabase,
-            GuidFormat = MySqlGuidFormat.Binary16
-        }.ConnectionString;
-    }
+    public string DatabaseName => _database.Name;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(Environments.Development);
 
-        // Give JwtOptions.ValidateOnStart a valid key so the host boots without depending on
-        // the developer's user-secrets. These tests do not validate real tokens.
-        builder.ConfigureAppConfiguration(config =>
-        {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Helios:Jwt:SigningKey"] = "integration-tests-signing-key-not-a-real-secret",
-                ["Helios:Jwt:Issuer"] = "helios-test",
-                ["Helios:Jwt:Audience"] = "helios-test",
+        // UseSetting lands in host configuration before Program reads it, unlike
+        // ConfigureAppConfiguration under minimal hosting. None of these are real secrets.
+        builder.UseSetting("ConnectionStrings:MySql", _database.ConnectionString);
+        builder.UseSetting("Helios:Jwt:SigningKey", SigningKey);
+        builder.UseSetting("Helios:Jwt:Issuer", "helios-test");
+        builder.UseSetting("Helios:Jwt:Audience", "helios-test");
+        builder.UseSetting("Helios:Secrets:ActiveKeyId", "test");
+        builder.UseSetting("Helios:Secrets:Keys:test", Convert.ToBase64String(new byte[32]));
 
-                // A fixed 32-byte AES key so the secret store boots under test. Not a real secret.
-                ["Helios:Secrets:ActiveKeyId"] = "test",
-                ["Helios:Secrets:Keys:test"] = Convert.ToBase64String(new byte[32]),
-            });
-        });
+        // Many tests register accounts from the same in-memory client address. The throttle
+        // itself is covered by a dedicated test with a low limit.
+        builder.UseSetting("Helios:RateLimits:Auth:PermitLimit", "100000");
 
         builder.ConfigureServices(services =>
         {
+            services.AddScoped<TestScopeIdentity>();
             services.RemoveAll<IWorkspaceContext>();
-            services.AddSingleton<IWorkspaceContext>(Context);
+            services.AddScoped<IWorkspaceContext>(sp =>
+                sp.GetRequiredService<TestScopeIdentity>().Override
+                ?? ActivatorUtilities.CreateInstance<HttpWorkspaceContext>(sp));
 
-            // Make the test scheme the default so RequireAuthorization uses it. The real
-            // JwtBearer scheme stays registered but is no longer the default.
-            services.AddAuthentication(TestAuthHandler.SchemeName)
-                .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
-
-            // Re-register the context outright instead of overriding configuration.
-            // Configuration precedence between the host's own sources and a test
-            // override is subtle and version-dependent; this is not.
+            // Re-register the context outright as well: whatever the developer's own
+            // configuration says, the only database these tests can reach is the disposable one.
             services.RemoveAll<DbContextOptions<HeliosDbContext>>();
             services.RemoveAll<DbContextOptions>();
             services.RemoveAll<HeliosDbContext>();
 
             services.AddDbContext<HeliosDbContext>((provider, options) =>
             {
-                MySqlConfiguration.Configure(options, BuildTestConnectionString(), "8.0.46");
+                MySqlConfiguration.Configure(options, _database.ConnectionString, "8.0.0");
                 options.AddInterceptors(provider.GetRequiredService<AuditableEntityInterceptor>());
             });
         });
     }
 
-    /// <summary>
-    /// Last line of defence before anything destructive runs. Asks the context which
-    /// database it actually resolved to, rather than trusting that the wiring above did
-    /// what it was supposed to.
-    /// </summary>
-    private static void AssertTargetsTestDatabase(HeliosDbContext db)
+    /// <summary>A service scope acting as the given identity, for tests that bypass HTTP.</summary>
+    public IServiceScope CreateScopeAs(Guid? userId, Guid? workspaceId, bool isSystem = false)
     {
-        var actual = db.Database.GetDbConnection().Database;
-
-        if (!string.Equals(actual, TestDatabase, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException(
-                $"Integration tests resolved to database '{actual}', not '{TestDatabase}'. " +
-                "Refusing to run: this fixture drops and recreates whatever it points at.");
-        }
+        var scope = Services.CreateScope();
+        scope.ServiceProvider.GetRequiredService<TestScopeIdentity>().Override =
+            new TestWorkspaceContext { UserId = userId, WorkspaceId = workspaceId, IsSystem = isSystem };
+        return scope;
     }
+
+    /// <summary>A scope with system authority, for test setup that edits state directly.</summary>
+    public IServiceScope CreateSystemScope() => CreateScopeAs(null, null, isSystem: true);
 
     async Task IAsyncLifetime.InitializeAsync()
     {
-        using var scope = Services.CreateScope();
+        await _database.CreateAsync();
+
+        using var scope = CreateSystemScope();
         var db = scope.ServiceProvider.GetRequiredService<HeliosDbContext>();
 
-        AssertTargetsTestDatabase(db);
+        // Last line of defence: ask the context where it actually points before migrating.
+        var actual = db.Database.GetDbConnection().Database;
+        if (!string.Equals(actual, _database.Name, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"Integration tests resolved to database '{actual}', not the disposable '{_database.Name}'. Refusing to run.");
+        }
 
-        // Rebuild from the real migrations rather than EnsureCreated, so these tests fail
-        // if a migration is broken — which is most of the point of running them.
-        await db.Database.EnsureDeletedAsync();
+        // The real migrations, so a broken migration fails the suite.
         await db.Database.MigrateAsync();
     }
 
     async Task IAsyncLifetime.DisposeAsync()
     {
-        using var scope = Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<HeliosDbContext>();
-
-        AssertTargetsTestDatabase(db);
-
-        await db.Database.EnsureDeletedAsync();
+        await DisposeAsync();
+        await MySqlConnection.ClearAllPoolsAsync();
+        await _database.DropAsync();
     }
 }

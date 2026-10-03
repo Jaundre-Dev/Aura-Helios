@@ -20,9 +20,12 @@ public sealed class JwtTokenIssuer(IOptions<JwtOptions> options, TimeProvider cl
         Guid userId,
         string email,
         string? displayName,
+        string securityStamp,
         Guid? workspaceId,
         WorkspaceRole? role)
     {
+        ArgumentException.ThrowIfNullOrEmpty(securityStamp);
+
         var now = clock.GetUtcNow();
         var expiresAt = now.AddMinutes(_options.TokenLifetimeMinutes);
 
@@ -30,6 +33,7 @@ public sealed class JwtTokenIssuer(IOptions<JwtOptions> options, TimeProvider cl
         {
             new(HeliosClaims.Subject, userId.ToString()),
             new(HeliosClaims.Email, email),
+            new(HeliosClaims.SecurityStamp, securityStamp),
         };
 
         if (displayName is not null)
