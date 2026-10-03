@@ -1,5 +1,6 @@
 using FluentValidation;
 using Helios.Application.Features.Accounts;
+using Helios.Application.Features.Agreements;
 using Helios.Application.Features.ApiKeys;
 using Helios.Application.Features.Billing;
 using Helios.Application.Features.Catalogue;
@@ -32,6 +33,7 @@ public static class ApplicationServiceCollectionExtensions
 
         services.AddScoped<CatalogueService>();
         services.AddScoped<EntitlementService>();
+        services.AddScoped<AgreementService>();
         services.AddScoped<ApiKeyService>();
         services.AddScoped<CallerResolver>();
         services.AddScoped<ProductRequestService>();

@@ -1,3 +1,4 @@
+using Helios.Application.Features.Agreements;
 using Helios.Api.Middleware;
 using Helios.Application.Features.Identity;
 using Helios.Contracts.Organizations;
@@ -42,6 +43,21 @@ public static class OrganizationEndpoints
             .WithSummary("Creates a company with the caller as Owner and a default workspace.")
             .WithValidation<CreateOrganizationRequest>()
             .Produces<OrganizationResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+
+        group.MapGet("/{id:guid}/agreements", async (Guid id, AgreementService service, CancellationToken ct) =>
+                Results.Ok(await service.ListAsync(id, ct)))
+            .WithName("ListAgreements")
+            .WithSummary("The documents live use requires, their current versions and this company's acceptances.")
+            .Produces<IReadOnlyList<AgreementStatusResponse>>();
+
+        group.MapPost("/{id:guid}/agreements", async (Guid id, AcceptAgreementRequest request, AgreementService service, CancellationToken ct) =>
+                Results.Ok(await service.AcceptAsync(id, request, ct)))
+            .WithName("AcceptAgreement")
+            .WithSummary("Records the Owner's acceptance of the current version of a document.")
+            .WithValidation<AcceptAgreementRequest>()
+            .Produces<IReadOnlyList<AgreementStatusResponse>>()
             .ProducesProblem(StatusCodes.Status409Conflict);
 
         group.MapGet("/{id:guid}/members", async (Guid id, OrganizationService service, CancellationToken ct) =>

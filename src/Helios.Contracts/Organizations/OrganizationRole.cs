@@ -57,5 +57,8 @@ public enum OrganizationPermission
     ViewAudit,
 
     /// <summary>Approve, correct or reject document results. Originals are always kept.</summary>
-    ReviewResults
+    ReviewResults,
+
+    /// <summary>Accept customer terms and the processing agreement for the company. Owner only.</summary>
+    AcceptAgreements
 }

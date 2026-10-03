@@ -1,6 +1,7 @@
 using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Common;
+using Helios.Application.Features.Agreements;
 using Helios.Application.Features.Identity;
 using Helios.Contracts.Catalogue;
 using Helios.Contracts.Organizations;
@@ -19,6 +20,7 @@ public sealed class EntitlementService(
     IHeliosDbContext db,
     OrganizationAccess access,
     CatalogueService catalogue,
+    AgreementService agreements,
     IAuditWriter audit)
 {
     public async Task<IReadOnlyList<EntitlementResponse>> ListAsync(Guid organizationId, CancellationToken ct)
@@ -53,13 +55,20 @@ public sealed class EntitlementService(
                 "product_unavailable");
         }
 
-        var needsApproval = request.Environment == ApiEnvironment.Live &&
-                            product.Sensitivity == Contracts.Catalogue.ProductSensitivity.SpecialPersonal;
+        var live = request.Environment == ApiEnvironment.Live;
+        var needsApproval = live && product.Sensitivity == Contracts.Catalogue.ProductSensitivity.SpecialPersonal;
 
-        if (needsApproval && string.IsNullOrWhiteSpace(request.Purpose))
+        // Live use of anything that processes personal information records why (permitted purpose).
+        if (live && product.Sensitivity != Contracts.Catalogue.ProductSensitivity.Standard && string.IsNullOrWhiteSpace(request.Purpose))
         {
             throw new ConflictException(
-                $"Live use of '{product.Slug}' needs a stated purpose for approval.", "purpose_required");
+                $"Live use of '{product.Slug}' processes personal information; state the purpose it is used for.", "purpose_required");
+        }
+
+        // Live use needs the company's acceptance of the current terms and processing agreement.
+        if (live)
+        {
+            await agreements.EnsureAcceptedAsync(organizationId, ct);
         }
 
         var entitlement = await db.Entitlements.SingleOrDefaultAsync(e =>

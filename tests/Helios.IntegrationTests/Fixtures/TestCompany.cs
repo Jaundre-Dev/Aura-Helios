@@ -57,10 +57,28 @@ public sealed class TestCompany
         return (await response.Content.ReadFromJsonAsync<CreatedApiKeyResponse>())!;
     }
 
-    public async Task EnableAsync(string slug, ApiEnvironment environment)
+    public async Task EnableAsync(string slug, ApiEnvironment environment, string? purpose = null)
     {
+        if (environment == ApiEnvironment.Live)
+        {
+            await AcceptAgreementsAsync();
+        }
+
         (await Owner.Client.PostAsJsonAsync($"/api/v1/organizations/{Organization.Id}/entitlements",
-            new EnableEntitlementRequest(slug, environment))).EnsureSuccessStatusCode();
+            new EnableEntitlementRequest(slug, environment, purpose))).EnsureSuccessStatusCode();
+    }
+
+    /// <summary>The Owner accepts every currently published legal document (needed for live use).</summary>
+    public async Task AcceptAgreementsAsync()
+    {
+        var required = await Owner.Client.GetFromJsonAsync<List<AgreementStatusResponse>>(
+            $"/api/v1/organizations/{Organization.Id}/agreements");
+
+        foreach (var agreement in required!.Where(a => !a.Accepted))
+        {
+            (await Owner.Client.PostAsJsonAsync($"/api/v1/organizations/{Organization.Id}/agreements",
+                new AcceptAgreementRequest(agreement.Document, agreement.CurrentVersion))).EnsureSuccessStatusCode();
+        }
     }
 
     /// <summary>Enables the products for live and returns a live key scoped to them.</summary>

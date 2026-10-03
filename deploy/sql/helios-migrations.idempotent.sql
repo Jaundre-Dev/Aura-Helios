@@ -2897,5 +2897,58 @@ DELIMITER ;
 CALL MigrationsScript();
 DROP PROCEDURE MigrationsScript;
 
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003150009_AgreementAcceptances') THEN
+
+    CREATE TABLE `agreement_acceptances` (
+        `id` binary(16) NOT NULL,
+        `organization_id` binary(16) NOT NULL,
+        `document` varchar(50) CHARACTER SET utf8mb4 NOT NULL,
+        `version` varchar(50) CHARACTER SET utf8mb4 NOT NULL,
+        `accepted_by` binary(16) NOT NULL,
+        `accepted_at` datetime(6) NOT NULL,
+        `ip_address` varchar(64) CHARACTER SET utf8mb4 NULL,
+        CONSTRAINT `pk_agreement_acceptances` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_agreement_acceptances_organizations_organization_id` FOREIGN KEY (`organization_id`) REFERENCES `organizations` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003150009_AgreementAcceptances') THEN
+
+    CREATE UNIQUE INDEX `ix_agreement_acceptances_organization_id_document_version` ON `agreement_acceptances` (`organization_id`, `document`, `version`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003150009_AgreementAcceptances') THEN
+
+    INSERT INTO `__helios_migrations_history` (`MigrationId`, `ProductVersion`)
+    VALUES ('20261003150009_AgreementAcceptances', '9.0.19');
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
 COMMIT;
 

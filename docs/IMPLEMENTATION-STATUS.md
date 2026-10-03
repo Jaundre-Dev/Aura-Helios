@@ -531,6 +531,29 @@ Forward migration `AccountSecurity`: `account_tokens`, `user_authenticators`, `r
 
 Test accounts now verify their email by following the emailed link.
 
+## Slice B2 — agreement acceptance and live gating (2026-10-03)
+
+- **Published documents** (`Helios:Legal:Documents`, e.g. `terms` and `dpa` mapped to their current version). The texts and versions are the owner's legal decision (A10). Until they are configured, enabling any **live** entitlement returns `409 agreements_not_published`. Sandbox is unaffected.
+- **Acceptance**: `GET /api/v1/organizations/{id}/agreements` lists each required document, its current version and this company's acceptance. `POST …/agreements {document, version}` records acceptance of the **current** version only. A new `AcceptAgreements` permission restricts this to the Owner. The record (`agreement_acceptances`) keeps the document, version, who accepted, when and the client address, unique per company, document and version. It is append-only and audited.
+- **Live gating**: enabling a live entitlement requires every published document's current version to be accepted (`409 agreements_required`). Live entitlements already enabled keep working after a version change; re-acceptance is needed before new live enables.
+- **Permitted purpose**: live use of any product that processes personal information (sensitivity Personal or SpecialPersonal) requires a stated purpose (`409 purpose_required`). It is stored on the entitlement. SpecialPersonal products still wait for platform approval (P2.4).
+
+Forward migration `AgreementAcceptances`; idempotent script regenerated.
+
+| Command | Result |
+| --- | --- |
+| `dotnet test Helios.sln --no-build` | UnitTests 174, ArchitectureTests 4, IntegrationTests 225 — all passed |
+
+`AgreementTests` (4) cover:
+- refusal before acceptance;
+- Owner-only, current-version-only acceptance, and idempotent repeats;
+- unknown documents rejected;
+- sandbox needing nothing;
+- the purpose requirement for personal-information products;
+- live use closed while no documents are published.
+
+Test companies accept the test documents before going live.
+
 ## Required update format for Claude
 
 For each completed slice record: date, phase, real user-visible behaviour, changed files, exact validation commands and outcomes, remaining blockers, and next concrete step. Mark a phase complete only after its acceptance gate passes. Distinguish synthetic sandbox functionality from verified live integration.

@@ -107,6 +107,11 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton(new RequestRetentionPolicy(
             TimeSpan.FromDays(configuration.GetValue("Helios:Requests:ResultRetentionDays", 30))));
 
+        // Required legal documents and their current versions; empty keeps live use closed.
+        services.AddSingleton(new Helios.Application.Features.Agreements.AgreementPolicy(
+            (configuration.GetSection("Helios:Legal:Documents").Get<Dictionary<string, string>>() ?? [])
+                .Where(d => !string.IsNullOrWhiteSpace(d.Value)).ToDictionary(d => d.Key, d => d.Value)));
+
         services.AddHostedService<ProductionSafetyCheck>();
 
         AddPaymentGateway(services, configuration);

@@ -23,3 +23,13 @@ public sealed record OrganizationMemberResponse(
     OrganizationRole Role,
     bool IsActive,
     DateTimeOffset CreatedAt);
+
+/// <summary>A required legal document, its current version, and whether this company accepted that version.</summary>
+public sealed record AgreementStatusResponse(
+    string Document,
+    string CurrentVersion,
+    bool Accepted,
+    DateTimeOffset? AcceptedAt,
+    Guid? AcceptedBy);
+
+public sealed record AcceptAgreementRequest(string Document, string Version);

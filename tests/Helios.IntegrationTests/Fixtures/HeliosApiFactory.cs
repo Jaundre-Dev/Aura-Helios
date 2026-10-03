@@ -51,6 +51,8 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
     public const string SigningKey = "integration-tests-signing-key-not-a-real-secret";
     public const string FakeGatewaySecret = "integration-tests-fake-gateway-secret-not-real";
     public const string FakeGatewayMerchant = "test-merchant";
+    public const string TestTermsVersion = "test-terms-1";
+    public const string TestDpaVersion = "test-dpa-1";
 
     private readonly DisposableTestDatabase _database = DisposableTestDatabase.FromEnvironment();
 
@@ -104,6 +106,10 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
 
         // Long-running attempts renew their lease quickly here, so renewal is observable in a test.
         builder.UseSetting("Helios:Execution:LeaseRenewalSeconds", "0.2");
+
+        // Published legal documents: live use needs the company Owner to accept these versions.
+        builder.UseSetting("Helios:Legal:Documents:terms", TestTermsVersion);
+        builder.UseSetting("Helios:Legal:Documents:dpa", TestDpaVersion);
 
         builder.UseSetting("Helios:Webhooks:MaxAttempts", "3");
         builder.UseSetting("Helios:Webhooks:BaseDelaySeconds", "0");
