@@ -19,7 +19,7 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | P0 Safe foundation | Backend complete; gate **not fully passed** | Backend build, unit, architecture and disposable-database integration tests pass (slice P0.1 below). Outstanding: frontend lockfile + production build (no npm on this machine), Docker image builds (no Docker on this machine) |
 | P1 Portal/catalogue/keys | Backend complete; gate **not passed** | API side of the gate passes (slice P1.1 below). Outstanding: functional portal pages (sign-in, company, team, catalogue, keys) — blocked on Node.js/npm |
 | P2 Jobs/usage/billing | **Gate items pass (API)**; scope gaps listed | All six P2 gate conditions are covered by passing integration tests (slices P2.1–P2.3). Not done: invoices (blocked on accounting confirmation of tax-invoice rules), a real payment gateway (blocked on contract), portal views (blocked on Node.js), platform admin for prices/adjustments |
-| P3 Document products | In progress | Safe uploads done (slice P3.1). Next: native-PDF text and invoice extraction, evaluation harness. Gate needs an owner-approved representative dataset and targets |
+| P3 Document products | In progress (gate not passed) | Safe uploads (P3.1); ocr.general and documents.invoice v1 for native PDFs, sandbox only (P3.2). Gate needs an owner-approved representative dataset, written targets and an OCR engine decision |
 | P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
 | P6 Expansion | Backlog | Customer-led catalogue additions |
@@ -241,6 +241,17 @@ These are proven against MySQL with test-only products and the fake gateway. The
 | Mutation: both layers off | `…(active_content)` and `Hex_escaped_…` failed as intended; restored |
 
 A first version of the JavaScript fixture lacked a cross-reference table, so it was refused as malformed and never reached the catalogue check; the layer-by-layer mutation run exposed this and the fixtures are now well-formed PDFs.
+
+## Slice P3.2 — native-PDF text and invoice extraction (2026-10-03)
+
+- **`ocr.general` v1** (Sandbox): text, lines and normalised line boxes from a PDF's own text layer. Pages without a text layer (scans) are returned empty, flagged for review and **not charged** (billed per page read). No OCR engine — that is an owner decision.
+- **`documents.invoice` v1** (Sandbox): invoice number, dates, supplier/customer names (only when labelled), VAT numbers, currency, subtotal, VAT, total and simple line items, each with page, box and source line; checks `totals_add_up`, `line_items_sum`, `vat_rate` (15%, "differs" not "fail"), `due_after_issue`, `supplier_vat_format`. Missing fields are null and listed; review is required when a required field is missing or a check fails.
+- Both are asynchronous (202 then worker), accept only PDFs in the caller's workspace/environment, enforce page limits (50 / 20) at acceptance, and fail once without retry (`upload_unavailable`) if the document is deleted after acceptance. A zero-unit outcome is never charged the minimum.
+- Forward data migration `DocumentProductsV1` publishes both as **Sandbox only** with schemas and stated limitations.
+
+Validation: `dotnet test Helios.sln` → UnitTests 116, ArchitectureTests 4, IntegrationTests 180, all passed; 0 build warnings.
+
+**P3 gate not passed:** accuracy, review-rate and latency have only been exercised on synthetic PDFs. The gate needs an owner-approved, lawfully obtained representative dataset and written targets. Remaining P3 work: an evaluation harness/report over such a dataset, an OCR engine decision for scanned documents, and the other document products (SA ID, statement, payslip, proof of address, classification).
 
 ## Required update format for Claude
 

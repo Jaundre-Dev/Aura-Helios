@@ -26,12 +26,14 @@ public sealed class CatalogueAndEntitlementTests(HeliosApiFactory factory)
         var products = listed!.Where(p => !p.Slug.StartsWith("test.", StringComparison.Ordinal)).ToList();
         Assert.Equal(12, products.Count);
 
-        var callable = Assert.Single(products, p => p.CallableInSandbox);
-        Assert.Equal(TestCompany.SaIdProduct, callable.Slug);
-        Assert.Equal(ProductReleaseState.Sandbox, callable.ReleaseState);
+        // Implemented products are sandbox-only until measured; everything else is Planned.
+        string[] implemented = [TestCompany.SaIdProduct, "ocr.general", "documents.invoice"];
+        Assert.Equal(implemented.Order(), products.Where(p => p.CallableInSandbox).Select(p => p.Slug).Order());
+        Assert.All(products.Where(p => implemented.Contains(p.Slug)),
+            p => Assert.Equal(ProductReleaseState.Sandbox, p.ReleaseState));
 
         Assert.DoesNotContain(products, p => p.CallableInLive);
-        Assert.All(products.Where(p => p.Slug != TestCompany.SaIdProduct),
+        Assert.All(products.Where(p => !implemented.Contains(p.Slug)),
             p => Assert.Equal(ProductReleaseState.Planned, p.ReleaseState));
         Assert.All(products.Where(p => p.Delivery == ProductDelivery.Partner),
             p => Assert.False(p.CallableInSandbox));

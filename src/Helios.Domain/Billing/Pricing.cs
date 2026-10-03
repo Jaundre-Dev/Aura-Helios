@@ -33,10 +33,14 @@ public class PriceVersion : Entity
 
     /// <summary>
     /// The charge for a quantity: unit price × quantity, never below the minimum, rounded half away
-    /// from zero to six places. Invoice totals round to cents separately.
+    /// from zero to six places. Nothing billable consumed means no charge at all — the minimum never
+    /// applies to zero units (a scanned page a text product could not read, for example). Invoice
+    /// totals round to cents separately.
     /// </summary>
     public decimal ChargeFor(decimal quantity) =>
-        Math.Max(MinimumCharge, Math.Round(UnitPrice * quantity, Precision, MidpointRounding.AwayFromZero));
+        quantity <= 0
+            ? 0m
+            : Math.Max(MinimumCharge, Math.Round(UnitPrice * quantity, Precision, MidpointRounding.AwayFromZero));
 }
 
 /// <summary>

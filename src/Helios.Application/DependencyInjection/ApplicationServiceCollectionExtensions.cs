@@ -5,6 +5,7 @@ using Helios.Application.Features.Catalogue;
 using Helios.Application.Features.Execution;
 using Helios.Application.Features.Identity;
 using Helios.Application.Features.Products;
+using Helios.Application.Features.Products.Documents;
 using Helios.Application.Features.Products.Identity;
 using Helios.Application.Features.Projects;
 using Helios.Application.Features.Requests;
@@ -47,6 +48,8 @@ public static class ApplicationServiceCollectionExtensions
 
         // First-party product executors. Each callable catalogue product needs exactly one here.
         services.AddSingleton<IProductExecutor, SaIdValidateExecutor>();
+        services.AddSingleton<IProductExecutor, OcrGeneralExecutor>();
+        services.AddSingleton<IProductExecutor, InvoiceExtractionExecutor>();
         services.AddSingleton<ProductExecutorRegistry>();
 
         return services;

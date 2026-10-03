@@ -23,6 +23,7 @@ public class BillingRulesTests
     [InlineData(0.123456, 7, 0.864192)]
     [InlineData(0.0000005, 1, 0.000001)]   // half away from zero at the sixth place
     [InlineData(2.50, 0, 0)]
+    [InlineData(2.50, -1, 0)]
     public void Charges_are_exact_to_six_places(decimal unitPrice, decimal quantity, decimal expected)
     {
         Assert.Equal(expected, Price(unitPrice).ChargeFor(quantity));
@@ -33,6 +34,7 @@ public class BillingRulesTests
     {
         Assert.Equal(1.50m, Price(0.20m, minimum: 1.50m).ChargeFor(2));
         Assert.Equal(4.00m, Price(0.20m, minimum: 1.50m).ChargeFor(20));
+        Assert.Equal(0m, Price(0.20m, minimum: 1.50m).ChargeFor(0));   // nothing consumed, nothing charged
     }
 
     [Fact]

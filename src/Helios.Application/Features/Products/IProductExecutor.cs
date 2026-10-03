@@ -118,6 +118,15 @@ public sealed class ProductInputException(IDictionary<string, string[]> errors)
         new(new Dictionary<string, string[]> { [field] = [message] });
 }
 
+/// <summary>
+/// The work cannot succeed however often it is tried (the upload was deleted after acceptance, for
+/// instance). The request fails at once with <see cref="Code"/>, and the reservation is released.
+/// </summary>
+public sealed class ProductExecutionFailedException(string code, string message) : Exception(message)
+{
+    public string Code { get; } = code;
+}
+
 /// <summary>The work certainly did not happen (connection refused, provider said "not processed"). Retryable.</summary>
 public sealed class ProviderUnavailableException(string message) : Exception(message);
 

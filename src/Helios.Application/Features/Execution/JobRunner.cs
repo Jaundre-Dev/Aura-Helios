@@ -98,6 +98,11 @@ public sealed class JobRunner(
             await MoveToReconcileAsync(claim, ex.ProviderReference, ex.Message, ct);
             return;
         }
+        catch (ProductExecutionFailedException ex)
+        {
+            await FailAsync(claim, ex.Code, ex.Message, ct);
+            return;
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             await RetryOrFailAsync(claim, ex, ct);
