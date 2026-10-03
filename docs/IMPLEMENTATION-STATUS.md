@@ -20,9 +20,68 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | P1 Portal/catalogue/keys | Backend complete; gate **not passed** | API side of the gate passes (slice P1.1 below). Outstanding: functional portal pages (sign-in, company, team, catalogue, keys) — blocked on Node.js/npm |
 | P2 Jobs/usage/billing | **Gate items pass (API)**; scope gaps listed | All six P2 gate conditions are covered by passing integration tests (slices P2.1–P2.3). Platform administration API with TOTP step-up (P2.4); lease renewal and delivery retention (P2.5). Not done: invoices (blocked on accounting confirmation of tax-invoice rules), a real payment gateway (blocked on contract), portal and admin views (blocked on Node.js) |
 | P3 Document products | In progress (gate not passed) | Safe uploads (P3.1); ocr.general and documents.invoice v1 (P3.2); bank statement, payslip, proof of address and classification v1 (P3.3) — native PDFs, sandbox only; review corrections and export (P3.4); evaluation harness (P3.5). Gate needs an owner-approved representative dataset, written targets and an OCR engine decision |
-| P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
+| P4 Verification partners | Blocked on contracts/credentials; not implemented | All four partner products are listed as Planned and cannot be executed. A provider adapter framework can proceed before contracts (see Remaining work, B7) |
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
 | P6 Expansion | Backlog | Customer-led catalogue additions |
+
+## Remaining work (consolidated 2026-10-03)
+
+This is the current list. The "Remaining" notes inside each slice below record what was outstanding when that slice landed, and some have since been done: retention purge (P3.1), lease renewal (P2.5), platform administration for prices and adjustments (P2.4). Validation at this point: `dotnet build Helios.sln` succeeded with 0 warnings; `dotnet test Helios.sln` passed UnitTests 174, ArchitectureTests 4 and IntegrationTests 216.
+
+### A. Needs the owner (decision, purchase, contract or access)
+
+Nothing here can be finished in code alone. Each item names what it unblocks.
+
+| # | What is needed | Unblocks |
+| --- | --- | --- |
+| A1 | Install Node.js LTS with npm on the build machine | Portal pages (sign-in, company, team, catalogue, keys, playground, requests, usage, billing, webhooks, review), platform admin pages, `package-lock.json`, frontend production build, web Docker image. Gates P0 and P1 depend on this |
+| A2 | Install Docker (or name a build host that has it) | Verifying the API, worker and web image builds and compose startup (P0 gate) |
+| A3 | A lawfully obtained, representative document set per product, and written accuracy, review-rate and latency targets | Running `helios-evaluate` ([EVALUATION.md](EVALUATION.md)), publishing measured results, and moving any document product beyond Sandbox (P3 gate) |
+| A4 | Choice of OCR engine or provider (licence, processing region, cost per page) | Scanned PDFs and photos for every document product, and `documents.sa-id`, whose ID documents are images |
+| A5 | Payment gateway contract and merchant credentials | A real `IPaymentGateway` adapter and settlement reconciliation. Only the test gateway exists, and Production refuses it |
+| A6 | Approved live prices and tax treatment per product | Live use of any product: Beta and Live need a published live price. No prices are seeded |
+| A7 | Accountant's confirmation of tax-invoice versus receipt rules, invoice numbering, VAT treatment and credit terms | Invoices and invoice views |
+| A8 | Refund, chargeback and negative-balance policy | Turning `NeedsReview` refund and chargeback events into ledger reversals |
+| A9 | Partner contracts and credentials for liveness, face comparison, bank account verification and company lookup | P4 adapters for those products, which are Planned and not executable today |
+| A10 | Legal and privacy decisions: customer terms and processing-agreement versions, retention limits per product, hosting and processing regions, a POPIA section 72 basis for any cross-border processing, biometric review | Terms/DPA acceptance records (B2), live approval of restricted products, final retention settings |
+| A11 | A ClamAV (or equivalent) deployment for each environment | Live uploads. Production refuses to start without a scanner |
+| A12 | Production object storage (bucket, region, encryption, lifecycle) | Large or high-volume documents. The current MySQL store is capped at 16 MB per object |
+| A13 | A transactional email provider | Real delivery of email verification and password reset (B1) |
+| A14 | A pilot sector and 3–5 pilot customers | P5 pilots, pricing validation and the launch gate |
+
+### B. Engineering work that can proceed now
+
+These items need no owner input, unless one is noted.
+
+| # | Work | Notes |
+| --- | --- | --- |
+| B1 | Email verification, password reset and customer MFA | Token flows and tests can be built against a development mail sink. Real sending needs A13 |
+| B2 | Onboarding records: accepted terms and processing-agreement versions, permitted-purpose statements, production-approval request flow | Final document versions come from A10 |
+| B3 | Per-key budgets and expiry policies, company spend limits, per-key and per-company rate limits on product execution | Plan sections 4 and 13; abuse limits for live use |
+| B4 | Publish OpenAPI outside Development, with curl examples per product; later TypeScript and Python SDKs generated from the contract | Plan section 8 |
+| B5 | Usage and ledger CSV exports for Finance | Invoices themselves wait for A7 |
+| B6 | Operational metrics: request counts, latency percentiles, queue delay, failure and review rates, reconciliation age, provider spend | Plan section 13. A metrics backend choice may come later |
+| B7 | Provider adapter framework: capability and region metadata, per-provider concurrency limits and circuit breakers, typed "unavailable" adapters | Ready for P4 partners once A9 lands |
+| B8 | A customer webhook event when a review decision is recorded | Optional |
+| B9 | Two-person approval for credit adjustments above a threshold | Optional. Today the control is the R100 000 cap plus the audit trail |
+| B10 | Platform MFA recovery codes | Today a lost authenticator needs another Administrator's reset |
+| B11 | Runbooks, a backup restore drill script, and a load-test harness | Running them is P5 work and needs an environment |
+
+### C. Known limits of the v1 document products
+
+These are by design, documented in the catalogue limitations, and lifted only through new versions measured under A3:
+
+- English labels only. Digital (native) PDFs only; scans need A4.
+- One document, one account or one employee per file.
+- Statement transactions must be one line each, starting with a date.
+- Classification is rule-based, not a trained model.
+- Nothing establishes that a document is authentic, verifies identity, employment or income, or decides regulatory acceptability.
+
+### D. Not started
+
+- **P5**: pilots, load testing at expected traffic, restore drills, alerting and runbook validation, support procedures, status communication.
+- **P6**: catalogue expansion beyond the initial 12 services. The 68-service list in [API-CATALOGUE.md](../API-CATALOGUE.md) remains a gated roadmap.
+- **Deferred by the plan**: multi-workspace UI, enterprise SSO, postpaid billing, private hosting, realtime updates.
 
 ## Slice P0.1 — safe test database, company authorisation, sessions (2026-10-03)
 
