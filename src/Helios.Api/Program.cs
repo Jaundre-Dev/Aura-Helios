@@ -23,6 +23,7 @@ builder.Services.AddProblemDetails(options =>
         context.ProblemDetails.Extensions["requestId"] = context.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<HeliosExceptionHandler>();
 builder.Services.AddHeliosRateLimiting(builder.Configuration);
+builder.Services.AddProductRateLimiting(builder.Configuration);
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<IWorkspaceContext, HttpWorkspaceContext>();

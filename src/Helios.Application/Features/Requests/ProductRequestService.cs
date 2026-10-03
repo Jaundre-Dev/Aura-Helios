@@ -50,6 +50,7 @@ public sealed class ProductRequestService(
     IPayloadProtector protector,
     PriceService prices,
     LedgerService ledger,
+    SpendingLimits spending,
     JobRunner runner,
     ExecutionPolicy policy,
     WebhookOutbox outbox,
@@ -200,6 +201,9 @@ public sealed class ProductRequestService(
                 if (billable)
                 {
                     await ledger.ReserveAsync(caller.OrganizationId, request.Id, maximumCharge!.Value, token);
+
+                    // Monthly caps, checked while the wallet lock serialises this company's requests.
+                    await spending.EnforceAsync(caller.OrganizationId, caller.Key?.Id, maximumCharge.Value, token);
                 }
 
                 return (request.Id, job.Id, job.FencingToken);

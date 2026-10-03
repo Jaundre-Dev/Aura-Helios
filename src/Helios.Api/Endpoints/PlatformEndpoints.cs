@@ -126,6 +126,13 @@ public static partial class PlatformEndpoints
             .WithSummary("Disables the key immediately.")
             .Produces<ApiKeyResponse>();
 
+        group.MapPut("/{id:guid}/budget", async (Guid id, UpdateKeyBudgetRequest request, ApiKeyService service, CancellationToken ct) =>
+                Results.Ok(await service.SetBudgetAsync(id, request, ct)))
+            .WithName("SetApiKeyBudget")
+            .WithSummary("Sets (or clears with null) the most this key may commit per calendar month, in Rand.")
+            .WithValidation<UpdateKeyBudgetRequest>()
+            .Produces<ApiKeyResponse>();
+
         group.MapPost("/{id:guid}/rotate", async (Guid id, ApiKeyService service, CancellationToken ct) =>
                 Results.Ok(await service.RotateAsync(id, ct)))
             .WithName("RotateApiKey")
@@ -160,6 +167,7 @@ public static partial class PlatformEndpoints
             })
             .WithTags("Requests")
             .WithName("ExecuteProduct")
+            .RequireRateLimiting(ProductRateLimiting.PolicyName)
             .WithSummary("Runs a product. Portal users choose ?environment= (default Sandbox); API keys act in their own environment.")
             .RequireAuthorization(HeliosAuthPolicies.ProductCaller)
             .Accepts<JsonElement>("application/json")
@@ -268,6 +276,18 @@ public static partial class PlatformEndpoints
             .WithSummary("Usage and charges per product for a period (default: last 30 days).")
             .Produces<UsageResponse>();
 
+        group.MapGet("/spend-limit", async (Guid organizationId, SpendingLimits service, CancellationToken ct) =>
+                Results.Ok(await service.GetAsync(organizationId, ct)))
+            .WithName("GetSpendLimit")
+            .Produces<SpendLimitResponse>();
+
+        group.MapPut("/spend-limit", async (Guid organizationId, UpdateSpendLimitRequest request, SpendingLimits service, CancellationToken ct) =>
+                Results.Ok(await service.SetAsync(organizationId, request, ct)))
+            .WithName("SetSpendLimit")
+            .WithSummary("Sets (or clears with null) the most the company may commit per calendar month, in Rand.")
+            .WithValidation<UpdateSpendLimitRequest>()
+            .Produces<SpendLimitResponse>();
+
         group.MapGet("/payments", async (Guid organizationId, PaymentService service, CancellationToken ct) =>
                 Results.Ok(await service.ListAsync(organizationId, ct)))
             .WithName("ListPayments")
@@ -344,6 +364,7 @@ public static partial class PlatformEndpoints
                 return Results.Created($"/api/v1/uploads/{upload.Id}", upload);
             })
             .WithName("CreateUpload")
+            .RequireRateLimiting(ProductRateLimiting.PolicyName)
             .WithSummary("Uploads a PDF, PNG, JPEG or TIFF (multipart field 'file'). Type, structure, size, page count and malware are checked before anything is stored.")
             .DisableAntiforgery()
             .Accepts<IFormFile>("multipart/form-data")

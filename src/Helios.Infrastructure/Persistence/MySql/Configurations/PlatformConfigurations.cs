@@ -97,6 +97,7 @@ public sealed class ApiKeyConfiguration : IEntityTypeConfiguration<ApiKey>
 
         builder.Property(k => k.Environment).HasConversion<string>().HasMaxLength(10);
         builder.Property(k => k.Scopes).HasMaxLength(2000).IsRequired();
+        builder.Property(k => k.MonthlyBudget).HasPrecision(19, 6);
 
         builder.HasIndex(k => k.PublicId).IsUnique();
         builder.HasIndex(k => new { k.WorkspaceId, k.CreatedAt });
@@ -153,6 +154,10 @@ public sealed class ApiRequestConfiguration : IEntityTypeConfiguration<ApiReques
 
         builder.HasIndex(r => new { r.WorkspaceId, r.CreatedAt });
         builder.HasIndex(r => r.ApiKeyId);
+
+        // Monthly spend checks sum a company's, or one key's, commitments since the month began.
+        builder.HasIndex(r => new { r.OrganizationId, r.CreatedAt });
+        builder.HasIndex(r => new { r.ApiKeyId, r.CreatedAt });
 
         builder.HasOne<Organization>()
             .WithMany()

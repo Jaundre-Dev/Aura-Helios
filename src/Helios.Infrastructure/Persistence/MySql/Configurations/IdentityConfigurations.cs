@@ -13,6 +13,7 @@ public sealed class OrganizationConfiguration : IEntityTypeConfiguration<Organiz
 
         builder.Property(o => o.Name).HasMaxLength(200).IsRequired();
         builder.Property(o => o.Slug).HasMaxLength(100).IsRequired();
+        builder.Property(o => o.MonthlySpendLimit).HasPrecision(19, 6);
 
         builder.HasIndex(o => o.Slug).IsUnique();
 

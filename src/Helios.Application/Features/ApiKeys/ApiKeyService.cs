@@ -62,7 +62,7 @@ public sealed class ApiKeyService(
             await access.RequireLockedAsync(organizationId, OrganizationPermission.ManageApiKeys, token);
 
             var (key, secret) = NewKey(organizationId, workspaceId, request.Name.Trim(), request.Environment,
-                scopes, request.ExpiresAt, request.ProjectId);
+                scopes, request.ExpiresAt, request.ProjectId, request.MonthlyBudget);
 
             audit.Record("api_key.create", nameof(ApiKey), key.Id.ToString(),
                 organizationId: organizationId,
@@ -97,6 +97,25 @@ public sealed class ApiKeyService(
         return ToResponse(key);
     }
 
+    /// <summary>Sets or clears a key's monthly budget; applies to the next request.</summary>
+    public async Task<ApiKeyResponse> SetBudgetAsync(Guid id, UpdateKeyBudgetRequest request, CancellationToken ct)
+    {
+        var (organizationId, _) = await RequireWorkspaceAsync(ct);
+        await access.RequireAsync(organizationId, OrganizationPermission.ManageApiKeys, ct);
+
+        var key = await db.ApiKeys.SingleOrDefaultAsync(k => k.Id == id, ct)
+            ?? throw new NotFoundException("API key", id);
+
+        key.MonthlyBudget = request.MonthlyBudget;
+
+        audit.Record("api_key.budget", nameof(ApiKey), key.Id.ToString(),
+            organizationId: organizationId,
+            metadataJson: $$"""{"monthlyBudget":{{(request.MonthlyBudget?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null")}}}""");
+
+        await db.SaveChangesAsync(ct);
+        return ToResponse(key);
+    }
+
     /// <summary>Issues a replacement with the same settings and revokes the original, atomically.</summary>
     public async Task<CreatedApiKeyResponse> RotateAsync(Guid id, CancellationToken ct)
     {
@@ -116,7 +135,7 @@ public sealed class ApiKeyService(
             }
 
             var (replacement, secret) = NewKey(organizationId, workspaceId, original.Name, original.Environment,
-                original.ScopeList, original.ExpiresAt, original.ProjectId);
+                original.ScopeList, original.ExpiresAt, original.ProjectId, original.MonthlyBudget);
 
             original.RevokedAt = clock.GetUtcNow();
             original.RevokedBy = context.UserId;
@@ -136,7 +155,8 @@ public sealed class ApiKeyService(
         ApiEnvironment environment,
         IReadOnlyCollection<string> scopes,
         DateTimeOffset? expiresAt,
-        Guid? projectId)
+        Guid? projectId,
+        decimal? monthlyBudget)
     {
         var generated = ApiKeySecrets.Generate(environment);
 
@@ -151,7 +171,8 @@ public sealed class ApiKeyService(
             SecretHash = generated.Hash,
             Environment = environment,
             Scopes = string.Join(',', scopes),
-            ExpiresAt = expiresAt
+            ExpiresAt = expiresAt,
+            MonthlyBudget = monthlyBudget
         };
 
         db.ApiKeys.Add(key);
@@ -213,5 +234,5 @@ public sealed class ApiKeyService(
 
     internal static ApiKeyResponse ToResponse(ApiKey k) =>
         new(k.Id, k.OrganizationId, k.WorkspaceId, k.ProjectId, k.Name, k.DisplayPrefix, k.Environment,
-            k.ScopeList, k.CreatedAt, k.ExpiresAt, k.RevokedAt, k.LastUsedAt);
+            k.ScopeList, k.CreatedAt, k.ExpiresAt, k.RevokedAt, k.LastUsedAt, k.MonthlyBudget);
 }

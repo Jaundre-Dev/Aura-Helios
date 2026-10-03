@@ -35,6 +35,9 @@ public class ApiKey : AuditableEntity, IAggregateRoot
     public Guid? RevokedBy { get; set; }
     public DateTimeOffset? LastUsedAt { get; set; }
 
+    /// <summary>Most this key may commit (reserved plus charged) per calendar month (UTC); null for no cap.</summary>
+    public decimal? MonthlyBudget { get; set; }
+
     public IReadOnlyList<string> ScopeList =>
         Scopes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 

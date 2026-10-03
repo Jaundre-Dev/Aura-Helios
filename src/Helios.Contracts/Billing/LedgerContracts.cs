@@ -93,3 +93,9 @@ public sealed record UsageResponse(
     string Currency,
     IReadOnlyList<UsageLine> Lines,
     decimal Total);
+
+/// <summary>Sets or clears (null) the company's monthly spend limit in Rand.</summary>
+public sealed record UpdateSpendLimitRequest(decimal? MonthlySpendLimit);
+
+/// <param name="Committed">Reserved plus charged since the start of the calendar month (UTC).</param>
+public sealed record SpendLimitResponse(decimal? MonthlySpendLimit, decimal Committed, DateTimeOffset PeriodStart, string Currency);

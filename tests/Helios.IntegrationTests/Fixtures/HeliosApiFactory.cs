@@ -97,6 +97,7 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
         // Many tests register accounts from the same in-memory client address. The throttle
         // itself is covered by a dedicated test with a low limit.
         builder.UseSetting("Helios:RateLimits:Auth:PermitLimit", "100000");
+        builder.UseSetting("Helios:RateLimits:Products:PermitLimit", "100000");
 
         // Retries and reconciliation become due immediately, so tests step the worker without
         // waiting. Lease expiry is simulated by moving lease_expires_at.

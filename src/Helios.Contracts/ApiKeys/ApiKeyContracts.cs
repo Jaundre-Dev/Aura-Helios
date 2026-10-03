@@ -11,7 +11,8 @@ public sealed record CreateApiKeyRequest(
     ApiEnvironment Environment,
     IReadOnlyList<string> Scopes,
     DateTimeOffset? ExpiresAt = null,
-    Guid? ProjectId = null);
+    Guid? ProjectId = null,
+    decimal? MonthlyBudget = null);
 
 public sealed record ApiKeyResponse(
     Guid Id,
@@ -25,10 +26,14 @@ public sealed record ApiKeyResponse(
     DateTimeOffset CreatedAt,
     DateTimeOffset? ExpiresAt,
     DateTimeOffset? RevokedAt,
-    DateTimeOffset? LastUsedAt);
+    DateTimeOffset? LastUsedAt,
+    decimal? MonthlyBudget = null);
 
 /// <summary>
 /// Returned exactly once, at creation or rotation. HELIOS stores only a hash; a lost secret
 /// cannot be recovered, only replaced.
 /// </summary>
 public sealed record CreatedApiKeyResponse(ApiKeyResponse Key, string Secret);
+
+/// <summary>Sets or clears (null) a key's monthly budget in Rand.</summary>
+public sealed record UpdateKeyBudgetRequest(decimal? MonthlyBudget);

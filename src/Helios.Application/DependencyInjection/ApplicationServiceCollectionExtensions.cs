@@ -43,6 +43,7 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<BillingProfileService>();
 
         services.AddScoped<LedgerService>();
+        services.AddScoped<SpendingLimits>();
         services.AddScoped<PriceService>();
         services.AddScoped<PaymentService>();
         services.AddScoped<BillingQueryService>();

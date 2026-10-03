@@ -554,6 +554,30 @@ Forward migration `AgreementAcceptances`; idempotent script regenerated.
 
 Test companies accept the test documents before going live.
 
+## Slice B3 — spend caps and rate limits (2026-10-03)
+
+- **Per-key monthly budget**:
+  - Set it at creation (`monthlyBudget`) or later with `PUT /api/v1/api-keys/{id}/budget` (null clears it). Rotation keeps the budget.
+  - When a request would take the key past its budget, it is refused with `402 key_budget_reached`.
+- **Company monthly spend limit**:
+  - Set with `GET/PUT /api/v1/organizations/{id}/billing/spend-limit`, which needs ManageBilling (Owner, Finance). The response shows the committed amount for the month.
+  - It covers every key and portal run in every workspace; over the limit returns `402 spend_limit_reached`.
+- **How "committed" is measured**: reserved amounts for requests in flight plus amounts charged, since the start of the calendar month (UTC).
+- **Concurrency**: both checks run inside the acceptance transaction, after the wallet row is locked. A company's requests are therefore serialised, and concurrency cannot exceed a cap: 20 parallel R1 requests against a R5 budget give exactly 5 accepted.
+- **Rate limits** (`Helios:RateLimits:Products`, default 600 per minute): applied to product execution and uploads, partitioned per API key (or per user for portal calls, per address otherwise). Over the limit returns `429` with `Retry-After`.
+
+Forward migration `SpendingLimits` adds `api_keys.monthly_budget`, `organizations.monthly_spend_limit`, and indexes on `api_requests (organization_id, created_at)` and `(api_key_id, created_at)`. Idempotent script regenerated.
+
+| Command | Result |
+| --- | --- |
+| `dotnet test Helios.sln --no-build` | UnitTests 174, ArchitectureTests 4, IntegrationTests 229 — all passed |
+
+`SpendAndRateLimitTests` (4) cover:
+- a key stopping at its budget while another key continues, a raised budget taking effect at once, and invalid budgets refused;
+- concurrent requests capped exactly;
+- a company limit spanning keys, settable only by billing roles, and clearable;
+- per-credential rate limiting with `Retry-After`.
+
 ## Required update format for Claude
 
 For each completed slice record: date, phase, real user-visible behaviour, changed files, exact validation commands and outcomes, remaining blockers, and next concrete step. Mark a phase complete only after its acceptance gate passes. Distinguish synthetic sandbox functionality from verified live integration.

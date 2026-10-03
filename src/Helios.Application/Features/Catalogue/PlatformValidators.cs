@@ -25,6 +25,8 @@ public sealed class CreateApiKeyRequestValidator : AbstractValidator<CreateApiKe
         RuleFor(r => r.Scopes).NotNull()
             .Must(s => s is { Count: > 0 and <= ApiKeyService.MaxScopes })
             .WithMessage($"Provide between 1 and {ApiKeyService.MaxScopes} product slugs.");
+        RuleFor(r => r.MonthlyBudget).Must(Billing.SpendingLimits.IsValidAmount)
+            .WithMessage("Use whole cents between 0 and R10 000 000, or omit for no budget.");
         RuleForEach(r => r.Scopes).NotEmpty().MaximumLength(100).Matches("^[a-z0-9.-]+$")
             .WithMessage("Scopes are product slugs: lowercase letters, digits, dots and hyphens.");
     }

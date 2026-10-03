@@ -9,5 +9,8 @@ public class Organization : AuditableEntity, IAggregateRoot
     public required string Slug { get; set; }
     public bool IsActive { get; set; } = true;
 
+    /// <summary>Most the company may commit (reserved plus charged) per calendar month (UTC); null for no cap.</summary>
+    public decimal? MonthlySpendLimit { get; set; }
+
     public List<Workspace> Workspaces { get; set; } = [];
 }
