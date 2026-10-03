@@ -98,6 +98,32 @@ public sealed class ReviewAndExportTests(HeliosApiFactory factory)
     }
 
     [Fact]
+    public async Task Each_decision_is_announced_by_webhook_with_paths_but_no_values()
+    {
+        var (company, key, id) = await ProcessedInvoiceAsync();
+        var host = $"hooks-{Guid.NewGuid():N}.example.com";
+        (await company.Owner.Client.PostAsJsonAsync("/api/v1/webhooks",
+            new Contracts.Webhooks.CreateWebhookRequest($"https://{host}/helios", [Contracts.Webhooks.WebhookEventTypes.RequestReviewed])))
+            .EnsureSuccessStatusCode();
+
+        (await ReviewAsync(key, id, ReviewDecisionType.Correct, "From email", ("fields.dueDate", "2026-10-15"))).EnsureSuccessStatusCode();
+        (await ReviewAsync(key, id, ReviewDecisionType.Approve)).EnsureSuccessStatusCode();
+        await _factory.DrainWebhooksAsync();
+
+        var received = _factory.WebhookReceiver.For(host);
+        Assert.Equal(2, received.Count);
+        Assert.Equal(2, received.Select(r => r.Headers["Helios-Event-Id"]).Distinct().Count());
+
+        using var first = JsonDocument.Parse(received[0].Body);
+        var data = first.RootElement.GetProperty("data");
+        Assert.Equal("request.reviewed", first.RootElement.GetProperty("type").GetString());
+        Assert.Equal(id, data.GetProperty("requestId").GetGuid());
+        Assert.Equal("corrected", data.GetProperty("state").GetString());
+        Assert.Equal(["fields.dueDate"], data.GetProperty("correctedPaths").EnumerateArray().Select(p => p.GetString()));
+        Assert.DoesNotContain("2026-10-15", received[0].Body);
+    }
+
+    [Fact]
     public async Task Exports_apply_corrections_and_defuse_spreadsheet_formulas()
     {
         var (company, key, id) = await ProcessedInvoiceAsync();

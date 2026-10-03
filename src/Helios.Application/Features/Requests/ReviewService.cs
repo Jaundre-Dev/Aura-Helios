@@ -25,6 +25,7 @@ public sealed class ReviewService(
     IHeliosDbContext db,
     CallerResolver callers,
     IAuditWriter audit,
+    Webhooks.WebhookOutbox outbox,
     TimeProvider clock)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -62,7 +63,7 @@ public sealed class ReviewService(
             }
         }
 
-        db.ReviewDecisions.Add(new ReviewDecision
+        var recorded = new ReviewDecision
         {
             ApiRequestId = request.Id,
             OrganizationId = request.OrganizationId,
@@ -73,7 +74,18 @@ public sealed class ReviewService(
             ActorUserId = caller.UserId,
             ApiKeyId = caller.Key?.Id,
             CreatedAt = clock.GetUtcNow()
-        });
+        };
+        db.ReviewDecisions.Add(recorded);
+
+        // Committed by the same save as the decision (transactional outbox).
+        await outbox.EnqueueReviewAsync(request, recorded.Id, submission.Decision.ToString(),
+            submission.Decision switch
+            {
+                ReviewDecisionType.Approve => "approved",
+                ReviewDecisionType.Correct => "corrected",
+                _ => "rejected"
+            },
+            corrections.Keys.ToList(), ct);
 
         // Paths, never values: the audit trail must not become a second copy of document data.
         audit.Record("request.review", nameof(ApiRequest), request.Id.ToString(),

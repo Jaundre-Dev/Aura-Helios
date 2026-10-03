@@ -596,6 +596,14 @@ Forward migration `SpendingLimits` adds `api_keys.monthly_budget`, `organization
 - finance exports containing the funding, reservations and two settlements with the right amounts;
 - Developer refused, and a backwards period refused.
 
+## Slice B8 — `request.reviewed` webhook (2026-10-03)
+
+- A new subscribable event, `request.reviewed`, is staged in the same save as each review decision (transactional outbox), with one event per decision (`evt_{decision}_request_reviewed`).
+- The payload carries the request id, product, version, environment, decision, resulting state, the **paths** corrected and the review URL. It never carries corrected values.
+- The outbox now stages any event through one helper, so duplicate protection and workspace scoping apply to every event type.
+
+`dotnet test Helios.sln --no-build`: UnitTests 174, ArchitectureTests 4, IntegrationTests 232 — all passed. The new test, `Each_decision_is_announced_by_webhook_with_paths_but_no_values`, checks that two decisions produce two distinct events, with paths and no values.
+
 ## Required update format for Claude
 
 For each completed slice record: date, phase, real user-visible behaviour, changed files, exact validation commands and outcomes, remaining blockers, and next concrete step. Mark a phase complete only after its acceptance gate passes. Distinguish synthetic sandbox functionality from verified live integration.

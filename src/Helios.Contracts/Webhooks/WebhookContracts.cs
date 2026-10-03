@@ -8,7 +8,10 @@ public static class WebhookEventTypes
     public const string RequestNeedsReview = "request.needs_review";
     public const string RequestCancelled = "request.cancelled";
 
-    public static readonly IReadOnlyList<string> All = [RequestSucceeded, RequestFailed, RequestNeedsReview, RequestCancelled];
+    /// <summary>A person or integration approved, corrected or rejected a result.</summary>
+    public const string RequestReviewed = "request.reviewed";
+
+    public static readonly IReadOnlyList<string> All = [RequestSucceeded, RequestFailed, RequestNeedsReview, RequestCancelled, RequestReviewed];
 }
 
 public sealed record CreateWebhookRequest(string Url, IReadOnlyList<string> Events, string? Description = null);

@@ -26,10 +26,66 @@ public sealed class WebhookOutbox(IHeliosDbContext db, TimeProvider clock)
         _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Only terminal states are published.")
     };
 
-    public async Task EnqueueAsync(ApiRequest request, CancellationToken ct)
+    /// <summary>Stages the event for a request reaching a terminal state.</summary>
+    public Task EnqueueAsync(ApiRequest request, CancellationToken ct)
     {
         var eventType = EventTypeFor(request.Status);
 
+        // Deterministic per request and event type, so a delivery can never be enqueued twice.
+        var eventId = $"evt_{request.Id:N}_{eventType.Replace('.', '_')}";
+
+        return StageAsync(request, eventId, eventType, now => new
+        {
+            id = eventId,
+            type = eventType,
+            createdAt = now,
+            data = new
+            {
+                requestId = request.Id,
+                product = request.ProductSlug,
+                version = request.ProductVersion,
+                environment = request.Environment.ToString(),
+                status = request.Status.ToString(),
+                error = request.ErrorCode,
+                completedAt = request.CompletedAt,
+                usage = new { unit = request.UsageUnit, quantity = request.UsageQuantity },
+                billing = new { state = request.BillingState.ToString(), currency = request.Currency, amount = request.BillingAmount },
+                resultUrl = $"/api/v1/requests/{request.Id}/result"
+            }
+        }, ct);
+    }
+
+    /// <summary>
+    /// Stages <c>request.reviewed</c> for one review decision (one event per decision). The payload
+    /// names the corrected paths, never the values: the customer fetches the review with its key.
+    /// </summary>
+    public Task EnqueueReviewAsync(
+        ApiRequest request, Guid decisionId, string decision, string state, IReadOnlyCollection<string> correctedPaths, CancellationToken ct)
+    {
+        const string eventType = WebhookEventTypes.RequestReviewed;
+        var eventId = $"evt_{decisionId:N}_request_reviewed";
+
+        return StageAsync(request, eventId, eventType, now => new
+        {
+            id = eventId,
+            type = eventType,
+            createdAt = now,
+            data = new
+            {
+                requestId = request.Id,
+                product = request.ProductSlug,
+                version = request.ProductVersion,
+                environment = request.Environment.ToString(),
+                decision,
+                state,
+                correctedPaths,
+                reviewUrl = $"/api/v1/requests/{request.Id}/review"
+            }
+        }, ct);
+    }
+
+    private async Task StageAsync(ApiRequest request, string eventId, string eventType, Func<DateTimeOffset, object> payloadAt, CancellationToken ct)
+    {
         // Filtered explicitly to the request's own workspace, so this also works for platform staff
         // resolving a request, whose session belongs to no workspace.
         var endpoints = await db.WebhookEndpoints
@@ -42,9 +98,6 @@ public sealed class WebhookOutbox(IHeliosDbContext db, TimeProvider clock)
         {
             return;
         }
-
-        // Deterministic per request and event type, so a delivery can never be enqueued twice.
-        var eventId = $"evt_{request.Id:N}_{eventType.Replace('.', '_')}";
 
         // A request can reach the same state twice (sent back from review to reconciliation, then
         // to review again). The customer was already told; the unique index would otherwise roll
@@ -63,26 +116,7 @@ public sealed class WebhookOutbox(IHeliosDbContext db, TimeProvider clock)
         }
 
         var now = clock.GetUtcNow();
-
-        var payload = JsonSerializer.Serialize(new
-        {
-            id = eventId,
-            type = eventType,
-            createdAt = now,
-            data = new
-            {
-                requestId = request.Id,
-                product = request.ProductSlug,
-                version = request.ProductVersion,
-                environment = request.Environment.ToString(),
-                status = request.Status.ToString(),
-                error = request.ErrorCode,
-                completedAt = request.CompletedAt,
-                usage = new { unit = request.UsageUnit, quantity = request.UsageQuantity },
-                billing = new { state = request.BillingState.ToString(), currency = request.Currency, amount = request.BillingAmount },
-                resultUrl = $"/api/v1/requests/{request.Id}/result"
-            }
-        }, Json);
+        var payload = JsonSerializer.Serialize(payloadAt(now), Json);
 
         foreach (var endpoint in subscribed)
         {
