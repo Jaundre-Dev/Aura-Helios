@@ -47,7 +47,7 @@ public class BillingRulesTests
     }
 
     [Fact]
-    public void Production_refuses_test_products_fake_payments_and_disabled_ssrf_protection()
+    public void Production_refuses_test_products_fake_payments_disabled_ssrf_protection_and_no_scanner()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -57,7 +57,7 @@ public class BillingRulesTests
 
         var problems = ProductionSafetyCheck.FindProblems(configuration, [new NamedExecutor("test.metered"), new NamedExecutor("identity.sa-id-validate")]).ToList();
 
-        Assert.Equal(3, problems.Count);
+        Assert.Equal(4, problems.Count);   // test product, fake gateway, SSRF bypass, no scanner
         Assert.Contains(problems, p => p.Contains("test.metered"));
         Assert.DoesNotContain(problems, p => p.Contains("identity.sa-id-validate"));
     }
@@ -65,7 +65,10 @@ public class BillingRulesTests
     [Fact]
     public void A_clean_production_configuration_has_no_problems()
     {
-        var configuration = new ConfigurationBuilder().Build();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Helios:Uploads:Scanner"] = "clamav",
+        }).Build();
 
         Assert.Empty(ProductionSafetyCheck.FindProblems(configuration, [new NamedExecutor("identity.sa-id-validate")]));
     }

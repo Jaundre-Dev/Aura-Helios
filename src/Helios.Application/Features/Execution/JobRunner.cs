@@ -40,6 +40,7 @@ public sealed class JobRunner(
     ExecutionPolicy policy,
     RequestRetentionPolicy retention,
     WebhookOutbox outbox,
+    IUploadAccess uploads,
     TimeProvider clock)
 {
     /// <summary>A job claim that another worker superseded. Nothing was committed.</summary>
@@ -68,7 +69,7 @@ public sealed class JobRunner(
             return;
         }
 
-        var context = new ProductExecutionContext(request.Id, request.Environment, job.Attempts + 1);
+        var context = new ProductExecutionContext(request.Id, request.Environment, job.Attempts + 1, uploads);
 
         var interrupted = claim.ReclaimedFromExpiredLease && job.ExecutionStartedAt is not null;
         if (claim.Phase == JobPhase.Reconcile || (interrupted && !executor.SafeToRepeat))

@@ -2,6 +2,7 @@ using Helios.Application.Abstractions.Execution;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.DependencyInjection;
 using Helios.Application.Features.Execution;
+using Helios.Application.Features.Retention;
 using Helios.Application.Features.Webhooks;
 using Helios.Infrastructure.DependencyInjection;
 
@@ -22,6 +23,7 @@ public static class WorkerServiceCollectionExtensions
         services.AddSingleton<ITenantScopeFactory, WorkerTenantScopes>();
         services.AddSingleton<JobWorker>();
         services.AddSingleton<WebhookDispatcher>();
+        services.AddSingleton<RetentionSweeper>();
 
         services.Configure<WorkerOptions>(configuration.GetSection(WorkerOptions.SectionName));
         services.AddHostedService<JobProcessingService>();

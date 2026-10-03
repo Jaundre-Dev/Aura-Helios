@@ -5,6 +5,7 @@ using Helios.Domain.Execution;
 using Helios.Domain.Identity;
 using Helios.Domain.Platform;
 using Helios.Domain.Requests;
+using Helios.Domain.Uploads;
 using Helios.Domain.Webhooks;
 using Microsoft.EntityFrameworkCore;
 
@@ -48,6 +49,7 @@ public interface IHeliosDbContext
     DbSet<PaymentEvent> PaymentEvents { get; }
     DbSet<WebhookEndpoint> WebhookEndpoints { get; }
     DbSet<WebhookDelivery> WebhookDeliveries { get; }
+    DbSet<Upload> Uploads { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

@@ -7,12 +7,15 @@ using Helios.Application.Features.ApiKeys;
 using Helios.Application.Features.Billing;
 using Helios.Application.Features.Catalogue;
 using Helios.Application.Features.Requests;
+using Helios.Application.Features.Uploads;
 using Helios.Application.Features.Webhooks;
 using Helios.Contracts.ApiKeys;
 using Helios.Contracts.Billing;
 using Helios.Contracts.Catalogue;
 using Helios.Contracts.Requests;
+using Helios.Contracts.Uploads;
 using Helios.Contracts.Webhooks;
+using Helios.Infrastructure.Documents;
 
 namespace Helios.Api.Endpoints;
 
@@ -37,6 +40,7 @@ public static partial class PlatformEndpoints
         MapBillingProfile(app);
         MapBilling(app);
         MapWebhooks(app);
+        MapUploads(app);
         return app;
     }
 
@@ -288,6 +292,58 @@ public static partial class PlatformEndpoints
     }
 
     private const int MaxCallbackBytes = 64 * 1024;
+
+    private static void MapUploads(IEndpointRouteBuilder app)
+    {
+        var group = app.MapGroup("/api/v1/uploads")
+            .WithTags("Uploads")
+            .RequireAuthorization(HeliosAuthPolicies.ProductCaller);
+
+        group.MapPost("/", async (
+                IFormFile file,
+                ApiEnvironment? environment,
+                UploadService service,
+                DocumentLimits limits,
+                CancellationToken ct) =>
+            {
+                if (file.Length > limits.MaxBytes)
+                {
+                    throw new PayloadTooLargeException((int)Math.Min(limits.MaxBytes, int.MaxValue));
+                }
+
+                using var buffer = new MemoryStream((int)file.Length);
+                await file.CopyToAsync(buffer, ct);
+
+                var upload = await service.CreateAsync(file.FileName, file.ContentType, buffer.ToArray(), environment, ct);
+                return Results.Created($"/api/v1/uploads/{upload.Id}", upload);
+            })
+            .WithName("CreateUpload")
+            .WithSummary("Uploads a PDF, PNG, JPEG or TIFF (multipart field 'file'). Type, structure, size, page count and malware are checked before anything is stored.")
+            .DisableAntiforgery()
+            .Accepts<IFormFile>("multipart/form-data")
+            .Produces<UploadResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
+            .ProducesProblem(StatusCodes.Status503ServiceUnavailable);
+
+        group.MapGet("/{id:guid}", async (Guid id, UploadService service, CancellationToken ct) =>
+                (await service.GetAsync(id, ct) is { } upload) ? Results.Ok(upload) : Results.NotFound())
+            .WithName("GetUpload")
+            .Produces<UploadResponse>();
+
+        group.MapGet("/{id:guid}/content", async (Guid id, UploadService service, CancellationToken ct) =>
+                (await service.OpenAsync(id, ct) is { } file)
+                    ? Results.File(file.Content, file.MediaType, file.FileName)
+                    : Results.NotFound())
+            .WithName("GetUploadContent")
+            .WithSummary("The original document. Requires ViewResults (not Finance or Developer).")
+            .ProducesProblem(StatusCodes.Status410Gone);
+
+        group.MapDelete("/{id:guid}", async (Guid id, UploadService service, CancellationToken ct) =>
+                await service.DeleteAsync(id, ct) ? Results.NoContent() : Results.NotFound())
+            .WithName("DeleteUpload")
+            .WithSummary("Deletes the document content now. Metadata is kept for audit and billing.");
+    }
 
     private static void MapWebhooks(IEndpointRouteBuilder app)
     {

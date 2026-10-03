@@ -115,6 +115,7 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
             services.AddSingleton<ITenantScopeFactory, TestTenantScopes>();
             services.AddSingleton<JobWorker>();
             services.AddSingleton<WebhookDispatcher>();
+            services.AddSingleton<Application.Features.Retention.RetentionSweeper>();
 
             // Webhook deliveries go to an in-memory receiver instead of the network. The real,
             // connect-time SSRF guard is exercised directly in WebhookTests.

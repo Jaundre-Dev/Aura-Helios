@@ -19,7 +19,7 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | P0 Safe foundation | Backend complete; gate **not fully passed** | Backend build, unit, architecture and disposable-database integration tests pass (slice P0.1 below). Outstanding: frontend lockfile + production build (no npm on this machine), Docker image builds (no Docker on this machine) |
 | P1 Portal/catalogue/keys | Backend complete; gate **not passed** | API side of the gate passes (slice P1.1 below). Outstanding: functional portal pages (sign-in, company, team, catalogue, keys) — blocked on Node.js/npm |
 | P2 Jobs/usage/billing | **Gate items pass (API)**; scope gaps listed | All six P2 gate conditions are covered by passing integration tests (slices P2.1–P2.3). Not done: invoices (blocked on accounting confirmation of tax-invoice rules), a real payment gateway (blocked on contract), portal views (blocked on Node.js), platform admin for prices/adjustments |
-| P3 Document products | Not started | Evaluated OCR and extraction through API and UI |
+| P3 Document products | In progress | Safe uploads done (slice P3.1). Next: native-PDF text and invoice extraction, evaluation harness. Gate needs an owner-approved representative dataset and targets |
 | P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
 | P6 Expansion | Backlog | Customer-led catalogue additions |
@@ -217,6 +217,30 @@ Forward migration `Webhooks`: `webhook_endpoints`, `webhook_deliveries` (unique 
 | Status polling is free | `Status_polling_is_free` |
 
 These are proven against MySQL with test-only products and the fake gateway. They are **not** evidence of a live paid service: no real product is priced, no real gateway is integrated, and no portal exists. Outstanding P2 scope: invoices (needs the owner's accountant to confirm receipt versus tax-invoice rules and credit terms), a real gateway adapter (contract), platform administration for prices and credit adjustments, lease renewal for long jobs, and a retention job purging expired results and old deliveries.
+
+## Slice P3.1 — safe document uploads and retention (2026-10-03)
+
+### Behaviour now in place
+
+- **Uploads** `POST /api/v1/uploads` (multipart field `file`; API keys or users with `ExecuteProducts`), `GET /api/v1/uploads/{id}`, `GET …/{id}/content`, `DELETE …/{id}`. Each upload belongs to one company, workspace and environment.
+- **Checked before anything is stored**: type detected from the bytes (PDF, PNG, JPEG, TIFF only) and compared with the client's claim; size limit (10 MB default) and page limit (50 default); PDFs parsed (malformed or encrypted refused); **active content refused by two independent layers** — a raw-byte name scan (stream bodies skipped to avoid false positives, `#xx` hex escapes decoded) and a structural catalogue check (open actions running JavaScript/Launch, document actions, script/embedded-file name trees, XFA); image headers checked against decompression-bomb limits. Refusals are audited; refused files are never stored.
+- **Malware scanning**: a ClamAV adapter (`INSTREAM` over TCP). With no scanner configured, uploads are marked `NotScanned` and usable in sandbox only; live uploads are refused (`503 scanner_unavailable`), and live requests refuse unscanned uploads. **Production refuses to start without a scanner.** ClamAV itself is not installed here; the adapter is tested against a protocol-level fake that flags the EICAR test string.
+- **Access**: metadata for executors, result readers and diagnostics roles; document download requires `ViewResults` (Finance and Developer cannot download). Keys see only their own environment. File names are sanitised display names, never paths.
+- **Retention**: uploads expire after `Helios:Uploads:RetentionDays` (default 7). The worker's retention sweep deletes expired document content and expired result payloads, workspace by workspace, keeping metadata for audit and billing. This also closes the P1 gap where expired results were hidden but still stored.
+- Document products receive uploads through a workspace-confined accessor; acceptance checks that a referenced upload belongs to the caller's workspace and environment, is still available, is a supported type and within the product's page limit — before anything is reserved.
+- New dependency: **PdfPig 0.1.16** (Apache-2.0) for PDF parsing and test fixture generation. No OCR engine is included.
+
+### Validation (2026-10-03)
+
+| Command | Result |
+| --- | --- |
+| `dotnet build Helios.sln` | Succeeded, 0 warnings, 0 errors |
+| `dotnet test Helios.sln --no-build` | UnitTests 94, ArchitectureTests 4, IntegrationTests 171 — all passed |
+| Mutation: raw-byte scan off | Both JavaScript fixtures still refused by the catalogue layer |
+| Mutation: catalogue check off | Both still refused by the raw-byte layer |
+| Mutation: both layers off | `…(active_content)` and `Hex_escaped_…` failed as intended; restored |
+
+A first version of the JavaScript fixture lacked a cross-reference table, so it was refused as malformed and never reached the catalogue check; the layer-by-layer mutation run exposed this and the fixtures are now well-formed PDFs.
 
 ## Required update format for Claude
 

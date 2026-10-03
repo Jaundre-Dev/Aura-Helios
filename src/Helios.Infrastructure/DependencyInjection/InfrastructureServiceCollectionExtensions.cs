@@ -6,6 +6,9 @@ using Helios.Application.Abstractions.Payments;
 using Helios.Infrastructure.Execution;
 using Helios.Application.Abstractions.Webhooks;
 using Helios.Application.Features.Webhooks;
+using Helios.Application.Abstractions.Documents;
+using Helios.Application.Features.Uploads;
+using Helios.Infrastructure.Documents;
 using Helios.Infrastructure.Payments;
 using Helios.Infrastructure.Webhooks;
 using Helios.Application.Abstractions.Security;
@@ -104,8 +107,43 @@ public static class InfrastructureServiceCollectionExtensions
 
         AddPaymentGateway(services, configuration);
         AddWebhooks(services, configuration);
+        AddDocuments(services, configuration);
 
         return services;
+    }
+
+    /// <summary>
+    /// Upload inspection, PDF text reading and malware scanning (<c>Helios:Uploads</c>). With no
+    /// scanner configured, uploads are accepted as unscanned for sandbox use only; Production
+    /// refuses to start without one.
+    /// </summary>
+    private static void AddDocuments(IServiceCollection services, IConfiguration configuration)
+    {
+        var section = configuration.GetSection("Helios:Uploads");
+        var defaults = new DocumentLimits();
+
+        services.AddSingleton(new DocumentLimits
+        {
+            MaxBytes = section.GetValue("MaxBytes", defaults.MaxBytes),
+            MaxPages = section.GetValue("MaxPages", defaults.MaxPages),
+            MaxImagePixels = section.GetValue("MaxImagePixels", defaults.MaxImagePixels),
+            MaxImageSide = section.GetValue("MaxImageSide", defaults.MaxImageSide),
+        });
+        services.AddSingleton(new UploadPolicy(TimeSpan.FromDays(section.GetValue("RetentionDays", 7))));
+        services.AddSingleton<IDocumentInspector, DocumentInspector>();
+        services.AddSingleton<IPdfTextReader, PdfPigTextReader>();
+
+        var scanner = section["Scanner"];
+        if (string.Equals(scanner, "clamav", StringComparison.OrdinalIgnoreCase))
+        {
+            var host = section["ClamAv:Host"] ?? "localhost";
+            var port = section.GetValue("ClamAv:Port", 3310);
+            services.AddSingleton<IMalwareScanner>(new ClamAvScanner(host, port));
+        }
+        else if (!string.IsNullOrWhiteSpace(scanner))
+        {
+            throw new InvalidOperationException($"Unknown malware scanner '{scanner}'. Supported: clamav.");
+        }
     }
 
     /// <summary>

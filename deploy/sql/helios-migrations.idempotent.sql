@@ -2296,5 +2296,83 @@ DELIMITER ;
 CALL MigrationsScript();
 DROP PROCEDURE MigrationsScript;
 
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003105709_Uploads') THEN
+
+    CREATE TABLE `uploads` (
+        `id` binary(16) NOT NULL,
+        `organization_id` binary(16) NOT NULL,
+        `workspace_id` binary(16) NOT NULL,
+        `environment` varchar(10) CHARACTER SET utf8mb4 NOT NULL,
+        `storage_ref` varchar(64) CHARACTER SET utf8mb4 NULL,
+        `file_name` varchar(200) CHARACTER SET utf8mb4 NOT NULL,
+        `media_type` varchar(100) CHARACTER SET utf8mb4 NOT NULL,
+        `size_bytes` bigint NOT NULL,
+        `page_count` int NOT NULL,
+        `has_text_layer` tinyint(1) NOT NULL,
+        `scan_state` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `scanner` varchar(50) CHARACTER SET utf8mb4 NULL,
+        `sha256` varchar(64) CHARACTER SET utf8mb4 NOT NULL,
+        `created_by_user_id` binary(16) NULL,
+        `created_by_api_key_id` binary(16) NULL,
+        `created_at` datetime(6) NOT NULL,
+        `expires_at` datetime(6) NOT NULL,
+        `deleted_at` datetime(6) NULL,
+        CONSTRAINT `pk_uploads` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_uploads_workspaces_workspace_id` FOREIGN KEY (`workspace_id`) REFERENCES `workspaces` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003105709_Uploads') THEN
+
+    CREATE INDEX `ix_uploads_deleted_at_expires_at` ON `uploads` (`deleted_at`, `expires_at`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003105709_Uploads') THEN
+
+    CREATE INDEX `ix_uploads_workspace_id_created_at` ON `uploads` (`workspace_id`, `created_at`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003105709_Uploads') THEN
+
+    INSERT INTO `__helios_migrations_history` (`MigrationId`, `ProductVersion`)
+    VALUES ('20261003105709_Uploads', '9.0.19');
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
 COMMIT;
 

@@ -50,6 +50,15 @@
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
   </ItemGroup>
 
+  <!-- ================= Documents ================= -->
+  <!--
+    PdfPig (Apache-2.0): reads native PDF text layers with positions, and writes PDFs for synthetic
+    test fixtures. It does not OCR images; no OCR engine has been selected (plan P3).
+  -->
+  <ItemGroup>
+    <PackageVersion Include="PdfPig" Version="0.1.16" />
+  </ItemGroup>
+
   <!-- ================= Application ================= -->
   <ItemGroup>
     <PackageVersion Include="FluentValidation" Version="12.1.1" />

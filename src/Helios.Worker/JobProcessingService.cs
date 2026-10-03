@@ -1,6 +1,7 @@
 using Helios.Application.Abstractions.Execution;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Features.Execution;
+using Helios.Application.Features.Retention;
 using Helios.Application.Features.Webhooks;
 using Microsoft.Extensions.Options;
 
@@ -15,6 +16,9 @@ public sealed class WorkerOptions
 
     /// <summary>Idle wait between polls when no job is due.</summary>
     public double PollSeconds { get; init; } = 2;
+
+    /// <summary>How often expired documents and results are purged.</summary>
+    public double RetentionMinutes { get; init; } = 15;
 }
 
 /// <summary>
@@ -25,6 +29,7 @@ public sealed class WorkerOptions
 public sealed class JobProcessingService(
     JobWorker worker,
     WebhookDispatcher webhooks,
+    RetentionSweeper retention,
     IOptions<WorkerOptions> options,
     ILogger<JobProcessingService> logger) : BackgroundService
 {
@@ -34,7 +39,36 @@ public sealed class JobProcessingService(
         logger.LogInformation("HELIOS worker started with {Concurrency} pollers.", settings.Concurrency);
 
         return Task.WhenAll(Enumerable.Range(0, Math.Max(1, settings.Concurrency))
-            .Select(index => PollAsync($"{Environment.MachineName}:{Environment.ProcessId}:{index}", settings, stoppingToken)));
+            .Select(index => PollAsync($"{Environment.MachineName}:{Environment.ProcessId}:{index}", settings, stoppingToken))
+            .Append(RetentionAsync(settings, stoppingToken)));
+    }
+
+    private async Task RetentionAsync(WorkerOptions settings, CancellationToken stoppingToken)
+    {
+        var interval = TimeSpan.FromMinutes(settings.RetentionMinutes);
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                var purged = await retention.SweepAsync(maxWorkspaces: 100, stoppingToken);
+                if (purged > 0)
+                {
+                    logger.LogInformation("Retention purged {Count} expired documents and results.", purged);
+                }
+
+                await Task.Delay(interval, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Retention sweep failed; it will run again.");
+                await Task.Delay(interval, stoppingToken);
+            }
+        }
     }
 
     private async Task PollAsync(string workerId, WorkerOptions settings, CancellationToken stoppingToken)

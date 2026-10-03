@@ -40,6 +40,18 @@ public interface IProductExecutor
     /// <summary>The most billable units this input can consume; the reservation is sized from it.</summary>
     decimal EstimateMaxUnits(ParsedProductInput input);
 
+    /// <summary>Sizing for document products, which know the referenced upload's page count.</summary>
+    decimal EstimateMaxUnits(ParsedProductInput input, UploadFacts? upload) => EstimateMaxUnits(input);
+
+    /// <summary>The upload this input refers to, for products that process a document.</summary>
+    Guid? UploadIdOf(ParsedProductInput input) => null;
+
+    /// <summary>Detected media types this version can process; checked at acceptance.</summary>
+    IReadOnlyCollection<string> SupportedMediaTypes => [];
+
+    /// <summary>Most pages this version accepts; 0 when it takes no documents.</summary>
+    int MaxPages => 0;
+
     /// <summary>
     /// Runs the product. A business outcome (including "no match" or "invalid") is a returned
     /// <see cref="ProductOutcome"/>. Throw <see cref="ProviderUnavailableException"/> when the work
@@ -51,7 +63,18 @@ public interface IProductExecutor
     Task<ReconcileOutcome> ReconcileAsync(string? providerReference, ProductExecutionContext context, CancellationToken cancellationToken);
 }
 
-public sealed record ProductExecutionContext(Guid RequestId, ApiEnvironment Environment, int Attempt);
+/// <param name="Uploads">Reads uploads in the executing request's own workspace only.</param>
+public sealed record ProductExecutionContext(Guid RequestId, ApiEnvironment Environment, int Attempt, IUploadAccess? Uploads = null);
+
+/// <summary>What acceptance established about a referenced upload.</summary>
+public sealed record UploadFacts(Guid Id, string MediaType, int PageCount, bool HasTextLayer);
+
+/// <summary>Opens upload content for an executor, confined to the current workspace.</summary>
+public interface IUploadAccess
+{
+    /// <summary>The bytes, or null when the upload is gone (deleted or expired since acceptance).</summary>
+    Task<byte[]?> OpenAsync(Guid uploadId, CancellationToken cancellationToken);
+}
 
 /// <summary>
 /// Validated input. <see cref="Canonical"/> is a stable serialisation used only to fingerprint the

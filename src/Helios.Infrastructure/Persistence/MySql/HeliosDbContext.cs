@@ -7,6 +7,7 @@ using Helios.Domain.Execution;
 using Helios.Domain.Identity;
 using Helios.Domain.Platform;
 using Helios.Domain.Requests;
+using Helios.Domain.Uploads;
 using Helios.Domain.Webhooks;
 using Helios.Infrastructure.Persistence.MySql.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -52,6 +53,7 @@ public class HeliosDbContext(
     public DbSet<PaymentEvent> PaymentEvents => Set<PaymentEvent>();
     public DbSet<WebhookEndpoint> WebhookEndpoints => Set<WebhookEndpoint>();
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
+    public DbSet<Upload> Uploads => Set<Upload>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -135,5 +137,8 @@ public class HeliosDbContext(
 
         modelBuilder.Entity<WebhookDelivery>()
             .HasQueryFilter(d => _workspaceContext.IsSystem || d.WorkspaceId == _workspaceContext.WorkspaceId);
+
+        modelBuilder.Entity<Upload>()
+            .HasQueryFilter(u => _workspaceContext.IsSystem || u.WorkspaceId == _workspaceContext.WorkspaceId);
     }
 }

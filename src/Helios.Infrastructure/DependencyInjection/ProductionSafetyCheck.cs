@@ -45,6 +45,11 @@ public sealed class ProductionSafetyCheck(
             yield return "Helios:Payments:Gateway is the fake test gateway.";
         }
 
+        if (string.IsNullOrWhiteSpace(configuration["Helios:Uploads:Scanner"]))
+        {
+            yield return "No malware scanner is configured (Helios:Uploads:Scanner); uploads would go unscanned.";
+        }
+
         if (configuration.GetValue("Helios:Webhooks:AllowPrivateNetworks", false))
         {
             yield return "Helios:Webhooks:AllowPrivateNetworks is enabled (SSRF protection off).";

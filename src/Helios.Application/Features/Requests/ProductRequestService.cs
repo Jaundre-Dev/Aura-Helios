@@ -12,6 +12,7 @@ using Helios.Application.Features.Products;
 using Helios.Contracts.Catalogue;
 using Helios.Contracts.Organizations;
 using Helios.Contracts.Requests;
+using Helios.Contracts.Uploads;
 using Helios.Domain.ApiKeys;
 using Helios.Domain.Execution;
 using Helios.Domain.Requests;
@@ -42,8 +43,7 @@ public sealed record ExecutionResult(ApiRequestEnvelope Envelope, bool Replayed,
 public sealed class ProductRequestService(
     IHeliosDbContext db,
     IUnitOfWork unitOfWork,
-    IWorkspaceContext context,
-    OrganizationAccess access,
+    CallerResolver callers,
     CatalogueService catalogue,
     ProductExecutorRegistry executors,
     IRequestFingerprinter fingerprinter,
@@ -59,15 +59,6 @@ public sealed class ProductRequestService(
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    private sealed record Caller(
-        Guid OrganizationId,
-        Guid WorkspaceId,
-        ApiEnvironment Environment,
-        ApiKey? Key,
-        Guid? UserId)
-    {
-        public string Channel => Key is null ? "portal" : "api";
-    }
 
     public async Task<ExecutionResult> ExecuteAsync(
         string productSlug,
@@ -77,7 +68,7 @@ public sealed class ProductRequestService(
         int bodyBytes,
         CancellationToken ct)
     {
-        var caller = await ResolveCallerAsync(requestedEnvironment, [OrganizationPermission.ExecuteProducts], ct);
+        var caller = await callers.ResolveAsync(requestedEnvironment, [OrganizationPermission.ExecuteProducts], ct);
 
         var product = await db.ApiProducts.AsNoTracking().SingleOrDefaultAsync(p => p.Slug == productSlug, ct)
             ?? throw new NotFoundException("Product", productSlug);
@@ -135,7 +126,8 @@ public sealed class ProductRequestService(
               ?? throw new ConflictException($"'{product.Slug}' has no current {caller.Environment} price.", "price_unavailable")
             : null;
 
-        var maximumCharge = price?.ChargeFor(executor.EstimateMaxUnits(input));
+        var upload = await ResolveUploadAsync(executor, input, caller, ct);
+        var maximumCharge = price?.ChargeFor(executor.EstimateMaxUnits(input, upload));
         var fingerprint = fingerprinter.Compute($"{product.Slug}/{executor.Version}\n{input.Canonical}");
 
         if (idempotencyKey is not null &&
@@ -334,7 +326,7 @@ public sealed class ProductRequestService(
         int limit,
         CancellationToken ct)
     {
-        var caller = await ResolveCallerAsync(environment, ReadPermissions(resultAccess: false), ct);
+        var caller = await callers.ResolveAsync(environment, ReadPermissions(resultAccess: false), ct);
 
         var query = db.ApiRequests.AsNoTracking().Where(r => r.WorkspaceId == caller.WorkspaceId);
 
@@ -365,7 +357,7 @@ public sealed class ProductRequestService(
     private async Task<ApiRequest?> FindReadableAsync(
         Guid id, bool resultAccess, CancellationToken ct, OrganizationPermission? requiredInstead = null)
     {
-        var caller = await ResolveCallerAsync(null,
+        var caller = await callers.ResolveAsync(null,
             requiredInstead is { } permission ? [permission] : ReadPermissions(resultAccess), ct);
 
         // The workspace query filter already confines this to the caller's workspace; a request
@@ -392,7 +384,7 @@ public sealed class ProductRequestService(
             : [OrganizationPermission.ViewResults, OrganizationPermission.ViewRequestDiagnostics];
 
     private async Task<ExecutionResult?> FindReplayAsync(
-        Caller caller,
+        RequestCaller caller,
         string productSlug,
         string version,
         string idempotencyKey,
@@ -429,37 +421,52 @@ public sealed class ProductRequestService(
             Accepted: !IsTerminal(existing.Status));
     }
 
-    private async Task<Caller> ResolveCallerAsync(
-        ApiEnvironment? requestedEnvironment,
-        IReadOnlyCollection<OrganizationPermission> userPermissions,
-        CancellationToken ct)
+    /// <summary>
+    /// For products that read an uploaded document: the upload must belong to the caller's workspace
+    /// and environment, still hold its content, be of a type and size the product version supports,
+    /// and — for live, billable work — have passed a malware scan. All of this is checked at
+    /// acceptance, so a bad reference costs nothing and reserves nothing.
+    /// </summary>
+    private async Task<UploadFacts?> ResolveUploadAsync(
+        IProductExecutor executor, ParsedProductInput input, RequestCaller caller, CancellationToken ct)
     {
-        if (context.ApiKeyId is { } keyId)
+        if (executor.UploadIdOf(input) is not { } uploadId)
         {
-            // Authentication already verified this key is live; read it for its authoritative scope.
-            var key = await db.ApiKeys.IgnoreQueryFilters().AsNoTracking().SingleAsync(k => k.Id == keyId, ct);
-
-            if (requestedEnvironment is { } env && env != key.Environment)
-            {
-                throw new ForbiddenException(
-                    $"This is a {key.Environment} key and cannot act in {env}.", "key_environment_mismatch");
-            }
-
-            return new Caller(key.OrganizationId, key.WorkspaceId, key.Environment, key, null);
+            return null;
         }
 
-        var userId = context.UserId ?? throw new UnauthenticatedException();
-        var workspaceId = context.WorkspaceId
-            ?? throw new ForbiddenException("Select a workspace first.", "workspace_required");
+        var upload = await db.Uploads.AsNoTracking().SingleOrDefaultAsync(u => u.Id == uploadId, ct);
 
-        var organizationId = await db.Workspaces
-            .Where(w => w.Id == workspaceId)
-            .Select(w => w.OrganizationId)
-            .SingleAsync(ct);
+        if (upload is null || upload.WorkspaceId != caller.WorkspaceId || !upload.IsAvailableAt(clock.GetUtcNow()))
+        {
+            throw ProductInputException.For("uploadId", "No such upload in this workspace, or it has expired or been deleted.");
+        }
 
-        await access.RequireAnyAsync(organizationId, userPermissions, ct);
+        if (upload.Environment != caller.Environment)
+        {
+            throw new BadRequestException(
+                $"This upload belongs to {upload.Environment}; sandbox and live documents are kept apart.", "upload_environment_mismatch");
+        }
 
-        return new Caller(organizationId, workspaceId, requestedEnvironment ?? ApiEnvironment.Sandbox, null, userId);
+        if (caller.Environment == ApiEnvironment.Live && upload.ScanState != ScanState.Clean)
+        {
+            throw new BadRequestException("Live processing requires a malware-scanned upload.", "upload_not_scanned");
+        }
+
+        if (!executor.SupportedMediaTypes.Contains(upload.MediaType, StringComparer.Ordinal))
+        {
+            throw new BadRequestException(
+                $"{executor.ProductSlug} v{executor.Version} does not support {upload.MediaType}. Supported: {string.Join(", ", executor.SupportedMediaTypes)}.",
+                "unsupported_media_type");
+        }
+
+        if (executor.MaxPages > 0 && upload.PageCount > executor.MaxPages)
+        {
+            throw new BadRequestException(
+                $"{executor.ProductSlug} accepts at most {executor.MaxPages} pages; this document has {upload.PageCount}.", "too_many_pages");
+        }
+
+        return new UploadFacts(upload.Id, upload.MediaType, upload.PageCount, upload.HasTextLayer);
     }
 
     private static ApiRequestEnvelope ToEnvelope(ApiRequest r, bool includeResult) =>

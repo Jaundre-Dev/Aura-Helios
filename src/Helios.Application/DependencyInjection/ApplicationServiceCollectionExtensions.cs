@@ -8,6 +8,7 @@ using Helios.Application.Features.Products;
 using Helios.Application.Features.Products.Identity;
 using Helios.Application.Features.Projects;
 using Helios.Application.Features.Requests;
+using Helios.Application.Features.Uploads;
 using Helios.Application.Features.Webhooks;
 using Helios.Application.Features.Workspaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -29,7 +30,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<CatalogueService>();
         services.AddScoped<EntitlementService>();
         services.AddScoped<ApiKeyService>();
+        services.AddScoped<CallerResolver>();
         services.AddScoped<ProductRequestService>();
+        services.AddScoped<UploadService>();
+        services.AddScoped<IUploadAccess, UploadAccess>();
         services.AddScoped<BillingProfileService>();
 
         services.AddScoped<LedgerService>();
