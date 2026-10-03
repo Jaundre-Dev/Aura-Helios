@@ -102,7 +102,8 @@ public sealed record PublishPriceRequest(
 /// <param name="Reference">Caller-chosen and unique: repeating a reference never posts twice.</param>
 public sealed record CreditAdjustmentRequest(decimal Amount, string Reason, string Reference);
 
-public sealed record CreditAdjustmentResponse(Guid OrganizationId, decimal Amount, string Reference, bool Posted, BalanceResponse Balance);
+/// <param name="ApprovalId">Set when the amount is above the approval threshold: nothing is posted until another staff member approves.</param>
+public sealed record CreditAdjustmentResponse(Guid OrganizationId, decimal Amount, string Reference, bool Posted, BalanceResponse Balance, Guid? ApprovalId = null);
 
 public sealed record ChangeReleaseStateRequest(ProductReleaseState State, string Reason);
 
@@ -178,3 +179,18 @@ public sealed record PlatformAuditEntry(
     string? DenyReason,
     string? Metadata,
     string? CorrelationId);
+
+public sealed record AdjustmentApprovalResponse(
+    Guid Id,
+    Guid OrganizationId,
+    decimal Amount,
+    string Reason,
+    string Reference,
+    Guid RequestedBy,
+    DateTimeOffset RequestedAt,
+    string State,
+    Guid? DecidedBy,
+    DateTimeOffset? DecidedAt,
+    string? DecisionReason);
+
+public sealed record DecideAdjustmentRequest(ApprovalDecision Decision, string Reason);

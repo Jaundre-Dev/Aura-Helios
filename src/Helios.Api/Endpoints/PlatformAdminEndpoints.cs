@@ -132,11 +132,36 @@ public static class PlatformAdminEndpoints
                 CreditAdjustmentRequest request,
                 PlatformAdministrationService service,
                 CancellationToken ct) =>
-                Results.Ok(await service.AdjustCreditAsync(organizationId, request, ct)))
+            {
+                var result = await service.AdjustCreditAsync(organizationId, request, ct);
+
+                // Above the approval threshold the adjustment waits for a second staff member.
+                return result is { ApprovalId: not null, Posted: false }
+                    ? Results.Accepted($"/api/v1/platform/adjustments/{result.ApprovalId}", result)
+                    : Results.Ok(result);
+            })
             .WithName("AdjustCredit")
             .WithSummary("Audited manual credit or debit. Repeating a reference posts nothing.")
             .WithValidation<CreditAdjustmentRequest>()
             .Produces<CreditAdjustmentResponse>()
+            .ProducesProblem(StatusCodes.Status402PaymentRequired)
+            .ProducesProblem(StatusCodes.Status409Conflict);
+
+        group.MapGet("/adjustments/pending", async (PlatformAdministrationService service, CancellationToken ct) =>
+                Results.Ok(await service.ListPendingAdjustmentsAsync(ct)))
+            .WithName("ListPendingAdjustments")
+            .Produces<IReadOnlyList<AdjustmentApprovalResponse>>();
+
+        group.MapPost("/adjustments/{approvalId:guid}/decision", async (
+                Guid approvalId,
+                DecideAdjustmentRequest request,
+                PlatformAdministrationService service,
+                CancellationToken ct) =>
+                Results.Ok(await service.DecideAdjustmentAsync(approvalId, request, ct)))
+            .WithName("DecideAdjustment")
+            .WithSummary("A second staff member approves (posts) or rejects a large adjustment. Never the requester.")
+            .WithValidation<DecideAdjustmentRequest>()
+            .Produces<AdjustmentApprovalResponse>()
             .ProducesProblem(StatusCodes.Status402PaymentRequired)
             .ProducesProblem(StatusCodes.Status409Conflict);
 

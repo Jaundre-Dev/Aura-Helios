@@ -56,6 +56,7 @@ public interface IHeliosDbContext
     DbSet<UserAuthenticator> UserAuthenticators { get; }
     DbSet<RecoveryCode> RecoveryCodes { get; }
     DbSet<AgreementAcceptance> AgreementAcceptances { get; }
+    DbSet<CreditAdjustmentApproval> CreditAdjustmentApprovals { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

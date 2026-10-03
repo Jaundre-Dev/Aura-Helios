@@ -8,6 +8,7 @@ using Helios.Contracts.Billing;
 using Helios.Contracts.Catalogue;
 using Helios.Contracts.Platform;
 using Helios.Domain.Catalogue;
+using Helios.Domain.Platform;
 using Microsoft.EntityFrameworkCore;
 
 namespace Helios.Application.Features.Platform;
@@ -25,6 +26,7 @@ public sealed class PlatformAdministrationService(
     PriceService prices,
     ProductExecutorRegistry executors,
     IAuditWriter audit,
+    PlatformPolicy platformPolicy,
     TimeProvider clock)
 {
     public const decimal MaxAdjustment = 100_000m;
@@ -234,6 +236,15 @@ public sealed class PlatformAdministrationService(
 
         var postingKey = $"platform:{organizationId:N}:{request.Reference}";
 
+        var approval = await db.CreditAdjustmentApprovals.AsNoTracking()
+            .SingleOrDefaultAsync(a => a.OrganizationId == organizationId && a.Reference == request.Reference, ct);
+
+        // Above the threshold, a second person must approve before anything is posted.
+        if (Math.Abs(request.Amount) > platformPolicy.AdjustmentApprovalThreshold || approval is not null)
+        {
+            return await RequestApprovalAsync(organizationId, request, actor.UserId, approval, postingKey, ct);
+        }
+
         var posted = await unitOfWork.ExecuteInTransactionAsync(async token =>
         {
             var done = await ledger.AdjustAsync(organizationId, postingKey, request.Amount, request.Reason, actor.UserId, token);
@@ -259,6 +270,133 @@ public sealed class PlatformAdministrationService(
         return new CreditAdjustmentResponse(organizationId, request.Amount, request.Reference, posted,
             await ledger.GetBalanceAsync(organizationId, ct));
     }
+
+    private async Task<CreditAdjustmentResponse> RequestApprovalAsync(
+        Guid organizationId, CreditAdjustmentRequest request, Guid requester, CreditAdjustmentApproval? existing, string postingKey, CancellationToken ct)
+    {
+        if (existing is not null)
+        {
+            // Repeating the same request is harmless; reusing its reference for something else is not.
+            if (existing.Amount != request.Amount)
+            {
+                throw new ConflictException("This reference was already used for a different adjustment.", "reference_reused");
+            }
+
+            return new CreditAdjustmentResponse(organizationId, existing.Amount, existing.Reference,
+                existing.State == AdjustmentApprovalState.Approved, await ledger.GetBalanceAsync(organizationId, ct), existing.Id);
+        }
+
+        if (await PostedAmountAsync(organizationId, postingKey, ct) is not null)
+        {
+            throw new ConflictException("This reference was already used for a different adjustment.", "reference_reused");
+        }
+
+        var approval = new CreditAdjustmentApproval
+        {
+            OrganizationId = organizationId,
+            Amount = request.Amount,
+            Reason = request.Reason,
+            Reference = request.Reference,
+            RequestedBy = requester,
+            RequestedAt = clock.GetUtcNow()
+        };
+
+        db.CreditAdjustmentApprovals.Add(approval);
+        audit.Record("platform.credit.approval_requested", nameof(CreditAdjustmentApproval), approval.Id.ToString(),
+            organizationId: organizationId,
+            metadataJson: JsonSerializer.Serialize(new { amount = request.Amount, reference = request.Reference, reason = request.Reason }));
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            throw new ConflictException("This reference was just used by another request.", "reference_reused");
+        }
+
+        return new CreditAdjustmentResponse(organizationId, request.Amount, request.Reference, false,
+            await ledger.GetBalanceAsync(organizationId, ct), approval.Id);
+    }
+
+    public async Task<IReadOnlyList<AdjustmentApprovalResponse>> ListPendingAdjustmentsAsync(CancellationToken ct)
+    {
+        await access.RequireAsync(PlatformPermission.AdjustCredit, ct);
+
+        var pending = await db.CreditAdjustmentApprovals.AsNoTracking()
+            .Where(a => a.State == AdjustmentApprovalState.Pending)
+            .OrderBy(a => a.RequestedAt)
+            .ToListAsync(ct);
+
+        return pending.Select(ToResponse).ToList();
+    }
+
+    /// <summary>
+    /// Approves (posting the adjustment) or rejects a pending one. The requester cannot decide their
+    /// own request. The state change and the posting commit together; a concurrent second decision
+    /// finds the request no longer pending and changes nothing.
+    /// </summary>
+    public async Task<AdjustmentApprovalResponse> DecideAdjustmentAsync(Guid approvalId, DecideAdjustmentRequest request, CancellationToken ct)
+    {
+        var actor = await access.RequireAsync(PlatformPermission.AdjustCredit, ct);
+
+        var approval = await db.CreditAdjustmentApprovals.AsNoTracking().SingleOrDefaultAsync(a => a.Id == approvalId, ct)
+            ?? throw new NotFoundException("Adjustment approval", approvalId);
+
+        if (approval.RequestedBy == actor.UserId)
+        {
+            audit.Record("platform.credit.decide", nameof(CreditAdjustmentApproval), approval.Id.ToString(), allowed: false,
+                denyReason: "Requester cannot decide their own adjustment.", organizationId: approval.OrganizationId);
+            await db.SaveChangesAsync(ct);
+            throw new ForbiddenException("A different staff member must decide this adjustment.", "four_eyes_required");
+        }
+
+        var approve = request.Decision == ApprovalDecision.Approve;
+        var now = clock.GetUtcNow();
+
+        await unitOfWork.ExecuteInTransactionAsync(async token =>
+        {
+            var newState = approve ? AdjustmentApprovalState.Approved : AdjustmentApprovalState.Rejected;
+            var changed = await db.CreditAdjustmentApprovals
+                .Where(a => a.Id == approvalId && a.State == AdjustmentApprovalState.Pending)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(a => a.State, newState)
+                    .SetProperty(a => a.DecidedBy, actor.UserId)
+                    .SetProperty(a => a.DecidedAt, now)
+                    .SetProperty(a => a.DecisionReason, request.Reason), token);
+
+            if (changed != 1)
+            {
+                throw new ConflictException("This adjustment has already been decided.", "not_pending");
+            }
+
+            if (approve)
+            {
+                // Throws 402 (and rolls the decision back) if a debit would overdraw the company.
+                await ledger.AdjustAsync(approval.OrganizationId, $"platform:{approval.OrganizationId:N}:{approval.Reference}",
+                    approval.Amount, approval.Reason, actor.UserId, token);
+            }
+
+            audit.Record(approve ? "platform.credit.approve" : "platform.credit.reject", nameof(CreditAdjustmentApproval),
+                approval.Id.ToString(), organizationId: approval.OrganizationId,
+                metadataJson: JsonSerializer.Serialize(new
+                {
+                    amount = approval.Amount,
+                    reference = approval.Reference,
+                    requestedBy = approval.RequestedBy,
+                    reason = request.Reason
+                }));
+
+            return true;
+        }, ct);
+
+        var decided = await db.CreditAdjustmentApprovals.AsNoTracking().SingleAsync(a => a.Id == approvalId, ct);
+        return ToResponse(decided);
+    }
+
+    private static AdjustmentApprovalResponse ToResponse(CreditAdjustmentApproval a) =>
+        new(a.Id, a.OrganizationId, a.Amount, a.Reason, a.Reference, a.RequestedBy, a.RequestedAt, a.State.ToString(),
+            a.DecidedBy, a.DecidedAt, a.DecisionReason);
 
     /// <summary>
     /// Verified gateway events that changed no money and need a person: refunds and chargebacks (no

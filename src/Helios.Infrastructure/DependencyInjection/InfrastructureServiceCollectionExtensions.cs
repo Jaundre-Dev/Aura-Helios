@@ -112,6 +112,9 @@ public static class InfrastructureServiceCollectionExtensions
             (configuration.GetSection("Helios:Legal:Documents").Get<Dictionary<string, string>>() ?? [])
                 .Where(d => !string.IsNullOrWhiteSpace(d.Value)).ToDictionary(d => d.Key, d => d.Value)));
 
+        services.AddSingleton(new Helios.Application.Features.Platform.PlatformPolicy(
+            configuration.GetValue("Helios:Platform:AdjustmentApprovalThreshold", 5_000m)));
+
         services.AddHostedService<ProductionSafetyCheck>();
 
         AddPaymentGateway(services, configuration);

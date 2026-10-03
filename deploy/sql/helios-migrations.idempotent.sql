@@ -3021,5 +3021,76 @@ DELIMITER ;
 CALL MigrationsScript();
 DROP PROCEDURE MigrationsScript;
 
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003151214_CreditAdjustmentApprovals') THEN
+
+    CREATE TABLE `credit_adjustment_approvals` (
+        `id` binary(16) NOT NULL,
+        `organization_id` binary(16) NOT NULL,
+        `amount` decimal(19,6) NOT NULL,
+        `reason` varchar(500) CHARACTER SET utf8mb4 NOT NULL,
+        `reference` varchar(100) CHARACTER SET utf8mb4 NOT NULL,
+        `requested_by` binary(16) NOT NULL,
+        `requested_at` datetime(6) NOT NULL,
+        `state` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `decided_by` binary(16) NULL,
+        `decided_at` datetime(6) NULL,
+        `decision_reason` varchar(500) CHARACTER SET utf8mb4 NULL,
+        CONSTRAINT `pk_credit_adjustment_approvals` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_credit_adjustment_approvals_organizations_organization_id` FOREIGN KEY (`organization_id`) REFERENCES `organizations` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003151214_CreditAdjustmentApprovals') THEN
+
+    CREATE UNIQUE INDEX `ix_credit_adjustment_approvals_organization_id_reference` ON `credit_adjustment_approvals` (`organization_id`, `reference`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003151214_CreditAdjustmentApprovals') THEN
+
+    CREATE INDEX `ix_credit_adjustment_approvals_state_requested_at` ON `credit_adjustment_approvals` (`state`, `requested_at`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003151214_CreditAdjustmentApprovals') THEN
+
+    INSERT INTO `__helios_migrations_history` (`MigrationId`, `ProductVersion`)
+    VALUES ('20261003151214_CreditAdjustmentApprovals', '9.0.19');
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
 COMMIT;
 

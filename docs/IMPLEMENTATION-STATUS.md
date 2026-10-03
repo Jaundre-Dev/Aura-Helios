@@ -604,6 +604,21 @@ Forward migration `SpendingLimits` adds `api_keys.monthly_budget`, `organization
 
 `dotnet test Helios.sln --no-build`: UnitTests 174, ArchitectureTests 4, IntegrationTests 232 — all passed. The new test, `Each_decision_is_announced_by_webhook_with_paths_but_no_values`, checks that two decisions produce two distinct events, with paths and no values.
 
+## Slice B9 — four-eyes credit adjustments (2026-10-03)
+
+- Adjustments larger than `Helios:Platform:AdjustmentApprovalThreshold` (default R5 000, either direction) are not posted. They become a pending approval (`credit_adjustment_approvals`) and the API returns `202` with an `approvalId`.
+- Repeating the same request returns the same approval. Reusing its reference for another amount, directly or through approval, returns `409 reference_reused`.
+- `GET /api/v1/platform/adjustments/pending` and `POST …/{id}/decision {Approve|Reject, reason}` handle the queue; both need AdjustCredit. **The requester can never decide their own request** (`403 four_eyes_required`, audited).
+- The decision is a conditional state change committed together with the ledger posting. A second decision returns `409 not_pending`. An approval that would overdraw the company returns `402` and the request stays pending.
+- The posting records the approver as creator, and the audit row names the requester.
+
+Forward migration `CreditAdjustmentApprovals`; idempotent script regenerated.
+
+`dotnet test Helios.sln --no-build`: UnitTests 174, ArchitectureTests 4, IntegrationTests 234 — all passed. `FourEyesAdjustmentTests` (2) cover:
+- the full approve path: nothing posted before approval, idempotent repeat, reference reuse refused, self-approval refused, one posting by the approver, second decision refused;
+- rejection posts nothing;
+- an overdrawing approval returns 402 and the request stays pending.
+
 ## Required update format for Claude
 
 For each completed slice record: date, phase, real user-visible behaviour, changed files, exact validation commands and outcomes, remaining blockers, and next concrete step. Mark a phase complete only after its acceptance gate passes. Distinguish synthetic sandbox functionality from verified live integration.

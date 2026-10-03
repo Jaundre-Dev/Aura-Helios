@@ -82,3 +82,12 @@ public sealed class CreditAdjustmentRequestValidator : AbstractValidator<CreditA
             .WithMessage("References use letters, digits, '.', '_', ':' and '-'.");
     }
 }
+
+public sealed class DecideAdjustmentRequestValidator : AbstractValidator<DecideAdjustmentRequest>
+{
+    public DecideAdjustmentRequestValidator()
+    {
+        RuleFor(r => r.Decision).IsInEnum();
+        RuleFor(r => r.Reason).IsReason();
+    }
+}

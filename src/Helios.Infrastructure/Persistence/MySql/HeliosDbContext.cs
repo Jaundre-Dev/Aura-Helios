@@ -60,6 +60,7 @@ public class HeliosDbContext(
     public DbSet<UserAuthenticator> UserAuthenticators => Set<UserAuthenticator>();
     public DbSet<RecoveryCode> RecoveryCodes => Set<RecoveryCode>();
     public DbSet<AgreementAcceptance> AgreementAcceptances => Set<AgreementAcceptance>();
+    public DbSet<CreditAdjustmentApproval> CreditAdjustmentApprovals => Set<CreditAdjustmentApproval>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
