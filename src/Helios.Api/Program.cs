@@ -4,7 +4,6 @@ using Helios.Api.Middleware;
 using Helios.Api.Security;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.DependencyInjection;
-using Helios.Application.Features.Requests;
 using Helios.Infrastructure.DependencyInjection;
 using Helios.Infrastructure.Persistence.MySql;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -29,9 +28,7 @@ builder.Services.AddHeliosIdentity();
 builder.Services.AddHeliosAuthentication(builder.Configuration);
 builder.Services.AddHeliosApplication();
 
-// Result payloads are personal data for most products; keep them only as long as configured.
-builder.Services.AddSingleton(new RequestRetentionPolicy(
-    TimeSpan.FromDays(builder.Configuration.GetValue("Helios:Requests:ResultRetentionDays", 30))));
+builder.Services.AddHeliosExecution(builder.Configuration);
 
 // Trust X-Forwarded-For only from explicitly listed reverse proxies. Without this the rate
 // limiter and audit trail see the proxy's address; trusting any sender would let a client

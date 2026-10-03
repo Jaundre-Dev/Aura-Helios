@@ -28,5 +28,12 @@ public sealed class UnauthenticatedException()
 public sealed class PayloadTooLargeException(int limitBytes)
     : HeliosException($"The request body exceeds this product's {limitBytes}-byte limit.", "input_too_large");
 
+/// <summary>Available credit does not cover the request's maximum cost (402). Nothing is reserved or run.</summary>
+public sealed class InsufficientCreditException(decimal available, decimal required)
+    : HeliosException($"Available credit (R{available:0.00####}) does not cover this request's maximum cost (R{required:0.00####}).", "insufficient_credit");
+
+/// <summary>A client error that is not a field validation failure (400), with a machine-readable code.</summary>
+public sealed class BadRequestException(string message, string code) : HeliosException(message, code);
+
 /// <summary>Valid request, but the result is no longer retained (410).</summary>
 public sealed class GoneException(string message) : HeliosException(message, "result_expired");

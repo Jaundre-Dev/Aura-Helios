@@ -144,7 +144,11 @@ public static partial class PlatformEndpoints
                     http.Response.Headers[ReplayedHeader] = "true";
                 }
 
-                return Results.Ok(result.Envelope);
+                // Finished work is 200 with the result; accepted-but-unfinished work is 202 with a
+                // status URL. Polling that URL is never billed.
+                return result.Accepted
+                    ? Results.Accepted($"/api/v1/requests/{result.Envelope.RequestId}", result.Envelope)
+                    : Results.Ok(result.Envelope);
             })
             .WithTags("Requests")
             .WithName("ExecuteProduct")
@@ -152,7 +156,9 @@ public static partial class PlatformEndpoints
             .RequireAuthorization(HeliosAuthPolicies.ProductCaller)
             .Accepts<JsonElement>("application/json")
             .Produces<ApiRequestEnvelope>()
+            .Produces<ApiRequestEnvelope>(StatusCodes.Status202Accepted)
             .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status402PaymentRequired)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
@@ -187,6 +193,13 @@ public static partial class PlatformEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status410Gone);
+
+        group.MapPost("/{id:guid}/cancel", async (Guid id, ProductRequestService service, CancellationToken ct) =>
+                (await service.CancelAsync(id, ct) is { } summary) ? Results.Ok(summary) : Results.NotFound())
+            .WithName("CancelRequest")
+            .WithSummary("Cancels a request still waiting in the queue and releases its reservation.")
+            .Produces<ApiRequestSummary>()
+            .ProducesProblem(StatusCodes.Status409Conflict);
     }
 
     private static void MapBillingProfile(IEndpointRouteBuilder app)

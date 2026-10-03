@@ -14,27 +14,37 @@ public sealed class UnitOfWork(HeliosDbContext context) : IUnitOfWork
     /// clean change tracker: the failed attempt rolled back, and re-running the delegate must not
     /// stage its rows twice.
     /// </summary>
-    public Task<T> ExecuteInTransactionAsync<T>(
+    public async Task<T> ExecuteInTransactionAsync<T>(
         Func<CancellationToken, Task<T>> work,
         CancellationToken cancellationToken)
     {
         var strategy = context.Database.CreateExecutionStrategy();
         var attempt = 0;
 
-        return strategy.ExecuteAsync(async ct =>
+        try
         {
-            if (attempt++ > 0)
+            return await strategy.ExecuteAsync(async ct =>
             {
-                context.ChangeTracker.Clear();
-            }
+                if (attempt++ > 0)
+                {
+                    context.ChangeTracker.Clear();
+                }
 
-            await using var transaction = await context.Database.BeginTransactionAsync(ct);
+                await using var transaction = await context.Database.BeginTransactionAsync(ct);
 
-            var result = await work(ct);
-            await context.SaveChangesAsync(ct);
-            await transaction.CommitAsync(ct);
+                var result = await work(ct);
+                await context.SaveChangesAsync(ct);
+                await transaction.CommitAsync(ct);
 
-            return result;
-        }, cancellationToken);
+                return result;
+            }, cancellationToken);
+        }
+        catch
+        {
+            // The transaction rolled back; nothing it staged may survive into a later save in this
+            // scope — a stale balance or an orphaned row would otherwise be written by accident.
+            context.ChangeTracker.Clear();
+            throw;
+        }
     }
 }

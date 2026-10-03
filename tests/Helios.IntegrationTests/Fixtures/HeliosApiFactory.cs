@@ -1,5 +1,12 @@
 using Helios.Api.Configuration;
+using Helios.Application.Abstractions.Execution;
+using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Abstractions.Security;
+using Helios.Application.Features.Billing;
+using Helios.Application.Features.Execution;
+using Helios.Application.Features.Products;
+using Helios.Contracts.Catalogue;
+using Helios.Domain.Catalogue;
 using Helios.Infrastructure.Persistence.MySql;
 using Helios.Infrastructure.Persistence.MySql.Interceptors;
 using Microsoft.AspNetCore.Hosting;
@@ -46,6 +53,9 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
 
     public string DatabaseName => _database.Name;
 
+    /// <summary>The disposable database's connection string, for hosts other than the API (the worker).</summary>
+    public string DatabaseConnectionString => _database.ConnectionString;
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(Environments.Development);
@@ -63,8 +73,19 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
         // itself is covered by a dedicated test with a low limit.
         builder.UseSetting("Helios:RateLimits:Auth:PermitLimit", "100000");
 
+        // Retries and reconciliation become due immediately, so tests step the worker without
+        // waiting. Lease expiry is simulated by moving lease_expires_at.
+        builder.UseSetting("Helios:Execution:RetryBaseDelaySeconds", "0");
+        builder.UseSetting("Helios:Execution:ReconcileDelaySeconds", "0");
+        builder.UseSetting("Helios:Execution:MaxReconcileAttempts", "3");
+
         builder.ConfigureServices(services =>
         {
+            services.AddSingleton<TestProviderLog>();
+            services.AddSingleton<IProductExecutor, TestMeteredExecutor>();
+            services.AddSingleton<IProductExecutor, TestProviderExecutor>();
+            services.AddSingleton<ITenantScopeFactory, TestTenantScopes>();
+
             services.AddScoped<TestScopeIdentity>();
             services.RemoveAll<IWorkspaceContext>();
             services.AddScoped<IWorkspaceContext>(sp =>
@@ -114,6 +135,75 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
 
         // The real migrations, so a broken migration fails the suite.
         await db.Database.MigrateAsync();
+
+        await SeedTestProductsAsync(scope.ServiceProvider);
+    }
+
+    /// <summary>Test-only, live-callable products with prices, so billing paths can be exercised.</summary>
+    private static async Task SeedTestProductsAsync(IServiceProvider services)
+    {
+        var db = services.GetRequiredService<HeliosDbContext>();
+        var prices = services.GetRequiredService<PriceService>();
+
+        foreach (var (slug, mode, unitPrice) in new[]
+                 {
+                     (TestProducts.Metered, "sync", TestProducts.MeteredUnitPrice),
+                     (TestProducts.Provider, "async", TestProducts.ProviderUnitPrice)
+                 })
+        {
+            var product = new ApiProduct
+            {
+                Slug = slug,
+                Name = $"Test product ({mode})",
+                Category = "Test",
+                Summary = "Integration-test-only product.",
+                Delivery = ProductDelivery.Build,
+                ReleaseState = ProductReleaseState.Live,
+                Sensitivity = ProductSensitivity.Standard,
+                BillingUnit = "Unit",
+                CurrentVersion = "1"
+            };
+
+            db.ApiProducts.Add(product);
+            db.ApiProductVersions.Add(new ApiProductVersion
+            {
+                ProductId = product.Id,
+                Version = "1",
+                ReleaseState = ProductReleaseState.Live,
+                MaxInputBytes = 4096,
+                PublishedAt = DateTimeOffset.UtcNow
+            });
+            await db.SaveChangesAsync();
+
+            await prices.PublishAsync(slug, ApiEnvironment.Live, "unit", unitPrice, 0m, "vat_exclusive_standard",
+                DateTimeOffset.UtcNow.AddMinutes(-1), actor: null, CancellationToken.None);
+        }
+    }
+
+    /// <summary>Credits a company's available balance through an audited ledger adjustment.</summary>
+    public async Task FundAsync(Guid organizationId, decimal amount)
+    {
+        using var scope = CreateSystemScope();
+        var ledger = scope.ServiceProvider.GetRequiredService<LedgerService>();
+        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
+
+        await unitOfWork.ExecuteInTransactionAsync(
+            ct => ledger.AdjustAsync(organizationId, $"test-fund:{Guid.NewGuid():N}", amount, "Test funding", null, ct),
+            CancellationToken.None);
+    }
+
+    /// <summary>Runs worker ticks until nothing is due. Returns how many jobs were processed.</summary>
+    public async Task<int> DrainJobsAsync(string workerId = "test-worker", int max = 50)
+    {
+        var worker = Services.GetRequiredService<JobWorker>();
+        var processed = 0;
+
+        while (processed < max && await worker.ProcessNextAsync(workerId, CancellationToken.None))
+        {
+            processed++;
+        }
+
+        return processed;
     }
 
     async Task IAsyncLifetime.DisposeAsync()

@@ -139,6 +139,12 @@ public sealed class ApiRequestConfiguration : IEntityTypeConfiguration<ApiReques
         builder.Property(r => r.BillingState).HasConversion<string>().HasMaxLength(20);
         builder.Property(r => r.Currency).HasMaxLength(3).IsRequired();
         builder.Property(r => r.BillingAmount).HasPrecision(18, 6);
+        builder.Property(r => r.ReservedAmount).HasPrecision(19, 6);
+
+        builder.HasOne<Domain.Billing.PriceVersion>()
+            .WithMany()
+            .HasForeignKey(r => r.PriceVersionId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Idempotency identity (plan section 9): tenant + environment + product/version + key.
         // MySQL unique indexes admit many NULLs, so requests without a key never collide.

@@ -18,7 +18,7 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | --- | --- | --- |
 | P0 Safe foundation | Backend complete; gate **not fully passed** | Backend build, unit, architecture and disposable-database integration tests pass (slice P0.1 below). Outstanding: frontend lockfile + production build (no npm on this machine), Docker image builds (no Docker on this machine) |
 | P1 Portal/catalogue/keys | Backend complete; gate **not passed** | API side of the gate passes (slice P1.1 below). Outstanding: functional portal pages (sign-in, company, team, catalogue, keys) — blocked on Node.js/npm |
-| P2 Jobs/usage/billing | Not started | Durable jobs, idempotency and transactional ledger |
+| P2 Jobs/usage/billing | In progress | Ledger, reservations, prices and durable jobs done (slice P2.1). Outstanding: payment gateway + verified callbacks, balance/usage/transaction views, customer webhooks |
 | P3 Document products | Not started | Evaluated OCR and extraction through API and UI |
 | P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
@@ -110,6 +110,46 @@ P1 gate items covered by `ApiKeyAndExecutionTests`: two companies sign up and ru
 ### Next step
 
 Install Node.js LTS, then build the P1 portal pages against these endpoints. Independent of that: P2 durable jobs, transactional ledger with atomic reservations, versioned prices, and payment adapter interfaces.
+
+## Slice P2.1 — ledger, reservations, prices, durable jobs (2026-10-03)
+
+### Behaviour now in place
+
+- **Ledger** (`ledger_accounts`, `ledger_transactions`, `ledger_entries`): append-only double entry in ZAR, `decimal(19,6)`. Every transaction balances (legs sum to zero) and carries a unique posting key (`reserve:{request}`, `settle:{request}`, `release:{request}`, `topup:{payment}`, `adjust:{key}`), so any repeat is a no-op. Customer accounts (`CustomerAvailable`, `CustomerReserved`) hold a balance projection updated in the same transaction under `SELECT … FOR UPDATE`; platform accounts (revenue, gateway clearing, adjustments) receive entries only and are never locked, so settlements do not serialise across tenants. Corrections are reversing entries, never edits.
+- **Reservations**: one per billable request, `Held` → exactly one of `Settled` (charge ≤ reserved, remainder returned) or `Released`. The reservation row is locked when resolved.
+- **Prices** (`price_versions`): versioned per product and environment, immutable; publishing closes the previous version. Charge = unit price × quantity, minimum applied, rounded half away from zero to six places. **No prices are seeded**; `PriceService.PublishAsync` exists but has no customer or admin endpoint yet (platform administration is later work).
+- **Usage** (`usage_events`): one immutable row per request (unique), recording product version, price version, units and amount.
+- **Execution flow** for every product request: validation → (live) required `Idempotency-Key` and a current price → one transaction creating the request, its durable job (input sealed with AES-GCM, purged at a terminal state) and, for live, the reservation of the maximum charge (`402 insufficient_credit` rolls everything back) → execution through the shared `JobRunner`. Synchronous products run inline under a lease and return 200; asynchronous ones return 202 with a status URL. Sandbox is never billable.
+- **Durable jobs** (`jobs`): claimed with `FOR UPDATE SKIP LOCKED`, leased, and fenced by a token that increments on every claim; every transition is a conditional update on that token, so a worker whose lease was taken over commits nothing. Definite provider failures retry with exponential backoff, then fail and **release** the reservation. An ambiguous outcome (`ProviderOutcomeUnknownException`) moves to `Reconciling` with money held; reconciliation settles if the provider completed, re-runs only if the provider confirms it did not, and hands to `NeedsReview` after the configured attempts. An attempt interrupted by a crash is reconciled, not repeated, unless the executor declares itself safe to repeat.
+- **Cancellation** `POST /api/v1/requests/{id}/cancel`: only while queued; releases the reservation in full. A worker claiming concurrently wins and the cancel returns 409.
+- **Worker host** (`Helios.Worker`): configurable pollers running the same `JobWorker`; each job is processed in a scope confined to its own workspace (claiming alone uses system scope).
+- **Production safety**: a Production host refuses to start with `test.*` executors, the fake payment gateway, or webhook SSRF protection disabled.
+- Envelopes now carry `error` and, while held, `billing.reserved`. A replay of an in-flight request returns 202 with `Idempotent-Replayed: true`.
+
+### Bug found and fixed during this slice
+
+EF identity resolution returned an already-tracked ledger account (with its pre-lock balance) instead of the row a `FOR UPDATE` read had just returned. In the inline API path that would have computed a settlement from a stale balance and overwritten a concurrent change. Locking reads now overwrite the tracked instance with the locked row's values. A mutation run (fix removed) makes `Concurrent_spend_never_exceeds_available_credit` fail twice in a row; with the fix it passes.
+
+### Schema
+
+Forward migration `LedgerPricingAndJobs`: the seven tables above plus `api_requests.price_version_id` and `reserved_amount`. Idempotent deployment script regenerated (six migrations).
+
+### Validation (2026-10-03)
+
+| Command | Result |
+| --- | --- |
+| `dotnet build Helios.sln` | Succeeded, 0 warnings, 0 errors |
+| `dotnet test tests/Helios.UnitTests` | 60 passed |
+| `dotnet test tests/Helios.IntegrationTests` | 120 passed |
+| Mutation: balance check under lock disabled | `Concurrent_spend…` and `Insufficient_credit…` failed as intended |
+| Mutation: interrupted non-repeatable attempt re-executed instead of reconciled | `A_crash_mid_call…` failed as intended |
+| Mutation: stale tracked ledger rows (fix removed) | `Concurrent_spend…` failed as intended |
+
+P2 gate items covered by `BillingAndExecutionTests` (test-only `test.metered` / `test.provider` products, registered only by the test host): 30 concurrent R1 requests against R10 → exactly 10 succeed, 20 get 402, balance ends at 0, never negative; 10 concurrent duplicates → one charge; stale worker after lease takeover → one settlement and one usage row; crash mid-call → reconciled after lease expiry, provider called once; unknown outcome → reconciled and settled once; provider-confirmed non-completion → safe re-run; permanent unknown → `NeedsReview` with money held; internal failure → 3 attempts then full release; 20 status/result polls post nothing. Each test ends by checking every transaction balances and every customer balance equals the sum of its entries. `WorkerHostTests` boots the real worker wiring and watches it settle a job.
+
+### Remaining P2 work
+
+Payment gateway adapter and verified, deduplicated callbacks (no gateway contract exists — a clearly named fake test gateway will stand in, refused in Production); customer balance/usage/transaction endpoints; signed customer webhooks with delivery records and SSRF protection; invoices (blocked on accounting confirmation of tax-invoice rules); lease renewal for long-running jobs; a price/adjustment administration surface for platform staff.
 
 ## Required update format for Claude
 

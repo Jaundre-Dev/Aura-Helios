@@ -2,13 +2,17 @@ using System.Text.Json;
 using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Common;
+using Helios.Application.Abstractions.Execution;
+using Helios.Application.Features.Billing;
 using Helios.Application.Features.Catalogue;
+using Helios.Application.Features.Execution;
 using Helios.Application.Features.Identity;
 using Helios.Application.Features.Products;
 using Helios.Contracts.Catalogue;
 using Helios.Contracts.Organizations;
 using Helios.Contracts.Requests;
 using Helios.Domain.ApiKeys;
+using Helios.Domain.Execution;
 using Helios.Domain.Requests;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,30 +21,39 @@ namespace Helios.Application.Features.Requests;
 /// <summary>Retention for stored result payloads; request metadata is kept independently.</summary>
 public sealed record RequestRetentionPolicy(TimeSpan ResultRetention);
 
-/// <summary>The outcome of an execution call: the envelope and whether it replayed an earlier request.</summary>
-public sealed record ExecutionResult(ApiRequestEnvelope Envelope, bool Replayed);
+/// <summary>
+/// The outcome of an execution call: the envelope, whether it replayed an earlier request, and
+/// whether it was only accepted (still queued, running or reconciling) rather than finished.
+/// </summary>
+public sealed record ExecutionResult(ApiRequestEnvelope Envelope, bool Replayed, bool Accepted = false);
 
 /// <summary>
 /// Executes products and serves request records. One path for API keys and signed-in users, so
 /// manual portal runs get the same authorisation, bounds and records as API calls (plan section 4).
 /// <para>
-/// Order of checks: caller and environment → product exists → product callable in environment →
-/// company entitlement → key scope → input validation → idempotency → execute → record. Nothing is
-/// recorded for a request rejected before execution, and nothing in sandbox is ever billable.
+/// Plan section 6 request flow: caller and environment → product exists and is callable →
+/// entitlement → key scope → bounds and input validation → price → idempotency → one transaction
+/// creating the request, its durable job and (live) the credit reservation → execute through the
+/// shared <see cref="JobRunner"/>. Nothing is recorded or reserved for a request rejected before
+/// acceptance, and nothing in sandbox is ever billable.
 /// </para>
 /// </summary>
 public sealed class ProductRequestService(
     IHeliosDbContext db,
+    IUnitOfWork unitOfWork,
     IWorkspaceContext context,
     OrganizationAccess access,
     CatalogueService catalogue,
     ProductExecutorRegistry executors,
     IRequestFingerprinter fingerprinter,
-    RequestRetentionPolicy retention,
+    IPayloadProtector protector,
+    PriceService prices,
+    LedgerService ledger,
+    JobRunner runner,
+    ExecutionPolicy policy,
     TimeProvider clock)
 {
     public const int MaxIdempotencyKeyLength = 255;
-    private const string Currency = "ZAR";
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -105,70 +118,185 @@ public sealed class ProductRequestService(
         }
 
         var input = executor.Parse(body);
+
+        // Live work costs money: it must be safely retryable, and it needs a published price.
+        var billable = caller.Environment == ApiEnvironment.Live;
+        if (billable && idempotencyKey is null)
+        {
+            throw new BadRequestException(
+                "Billable requests require an Idempotency-Key header so a retry can never charge twice.",
+                "idempotency_key_required");
+        }
+
+        var price = billable
+            ? await prices.FindActiveAsync(product.Id, caller.Environment, ct)
+              ?? throw new ConflictException($"'{product.Slug}' has no current {caller.Environment} price.", "price_unavailable")
+            : null;
+
+        var maximumCharge = price?.ChargeFor(executor.EstimateMaxUnits(input));
         var fingerprint = fingerprinter.Compute($"{product.Slug}/{executor.Version}\n{input.Canonical}");
 
         if (idempotencyKey is not null &&
             await FindReplayAsync(caller, product.Slug, executor.Version, idempotencyKey, input, ct) is { } replay)
         {
-            return new ExecutionResult(replay, Replayed: true);
+            return replay;
         }
 
-        var createdAt = clock.GetUtcNow();
-        var outcome = await executor.ExecuteAsync(input, caller.Environment, ct);
-        var completedAt = clock.GetUtcNow();
+        var sealedInput = protector.Protect(body.GetRawText());
+        var inline = executor.Mode == ExecutionMode.Synchronous;
 
-        var request = new ApiRequest
-        {
-            OrganizationId = caller.OrganizationId,
-            WorkspaceId = caller.WorkspaceId,
-            ProductId = product.Id,
-            ProductSlug = product.Slug,
-            ProductVersion = executor.Version,
-            Environment = caller.Environment,
-            Channel = caller.Channel,
-            ActorUserId = caller.UserId,
-            ApiKeyId = caller.Key?.Id,
-            Status = ApiRequestStatus.Succeeded,
-            IdempotencyKey = idempotencyKey,
-            FingerprintKeyId = fingerprint.KeyId,
-            PayloadFingerprint = fingerprint.Value,
-            ResultJson = outcome.Result.GetRawText(),
-            WarningsJson = outcome.Warnings.Count == 0 ? null : JsonSerializer.Serialize(outcome.Warnings, Json),
-            ReviewRequired = outcome.ReviewRequired,
-            UsageUnit = outcome.UsageUnit,
-            UsageQuantity = outcome.UsageQuantity,
-            // No live product is billable before the ledger exists (P2); sandbox never is.
-            BillingState = BillingState.NotBillable,
-            Currency = Currency,
-            BillingAmount = 0m,
-            CreatedAt = createdAt,
-            CompletedAt = completedAt,
-            ResultExpiresAt = completedAt + retention.ResultRetention
-        };
-
-        db.ApiRequests.Add(request);
-
+        Guid requestId, jobId;
+        long fencingToken;
         try
         {
-            await db.SaveChangesAsync(ct);
+            (requestId, jobId, fencingToken) = await unitOfWork.ExecuteInTransactionAsync(async token =>
+            {
+                var now = clock.GetUtcNow();
+
+                var request = new ApiRequest
+                {
+                    OrganizationId = caller.OrganizationId,
+                    WorkspaceId = caller.WorkspaceId,
+                    ProductId = product.Id,
+                    ProductSlug = product.Slug,
+                    ProductVersion = executor.Version,
+                    Environment = caller.Environment,
+                    Channel = caller.Channel,
+                    ActorUserId = caller.UserId,
+                    ApiKeyId = caller.Key?.Id,
+                    Status = inline ? ApiRequestStatus.Running : ApiRequestStatus.Queued,
+                    IdempotencyKey = idempotencyKey,
+                    FingerprintKeyId = fingerprint.KeyId,
+                    PayloadFingerprint = fingerprint.Value,
+                    UsageUnit = price?.Unit ?? "request",
+                    UsageQuantity = 0m,
+                    BillingState = billable ? BillingState.Reserved : BillingState.NotBillable,
+                    Currency = LedgerService.Currency,
+                    BillingAmount = 0m,
+                    PriceVersionId = price?.Id,
+                    ReservedAmount = maximumCharge,
+                    CreatedAt = now
+                };
+
+                // A synchronous product is claimed by this API instance at creation, under a normal
+                // lease: if this process dies mid-request, a worker reclaims and finishes it.
+                var job = new Job
+                {
+                    ApiRequestId = request.Id,
+                    OrganizationId = caller.OrganizationId,
+                    WorkspaceId = caller.WorkspaceId,
+                    ProductSlug = product.Slug,
+                    ProductVersion = executor.Version,
+                    Status = inline ? JobStatus.Running : JobStatus.Queued,
+                    AvailableAt = now,
+                    LeaseOwner = inline ? InlineWorkerId : null,
+                    LeaseExpiresAt = inline ? now + policy.Lease : null,
+                    FencingToken = inline ? 1 : 0,
+                    InputEnvelope = sealedInput.Envelope,
+                    InputKeyId = sealedInput.KeyId,
+                    CreatedAt = now
+                };
+
+                db.ApiRequests.Add(request);
+                db.Jobs.Add(job);
+
+                // Throws 402 — and rolls the whole acceptance back — when credit does not cover
+                // the maximum. The wallet row stays locked until commit, so concurrent requests
+                // queue behind each other and can never jointly overspend.
+                if (billable)
+                {
+                    await ledger.ReserveAsync(caller.OrganizationId, request.Id, maximumCharge!.Value, token);
+                }
+
+                return (request.Id, job.Id, job.FencingToken);
+            }, ct);
         }
         catch (DbUpdateException) when (idempotencyKey is not null)
         {
             // A concurrent request with the same idempotency key committed first. Answer as a
             // replay of it (or a conflict if the input differs) instead of a duplicate.
-            db.ApiRequests.Remove(request);
-
             var winner = await FindReplayAsync(caller, product.Slug, executor.Version, idempotencyKey, input, ct);
             if (winner is not null)
             {
-                return new ExecutionResult(winner, Replayed: true);
+                return winner;
             }
 
             throw;
         }
 
-        return new ExecutionResult(ToEnvelope(request, includeResult: true), Replayed: false);
+        if (inline)
+        {
+            await runner.RunAsync(
+                new ClaimedJob(jobId, caller.OrganizationId, caller.WorkspaceId, fencingToken, JobPhase.Execute, false), ct);
+        }
+
+        var stored = await db.ApiRequests.AsNoTracking().SingleAsync(r => r.Id == requestId, ct);
+        return new ExecutionResult(ToEnvelope(stored, includeResult: true), Replayed: false, Accepted: !IsTerminal(stored.Status));
     }
+
+    /// <summary>
+    /// Best-effort cancellation. A request still waiting in the queue is cancelled and its
+    /// reservation released in full. One already running, reconciling or finished is not: work may
+    /// have happened at a provider, and completed billable steps follow the product's policy.
+    /// </summary>
+    public async Task<ApiRequestSummary?> CancelAsync(Guid id, CancellationToken ct)
+    {
+        if (await FindReadableAsync(id, resultAccess: false, ct, OrganizationPermission.ExecuteProducts) is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            await CancelQueuedAsync(id, ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // A worker claimed the job between our read and our write (its claim moved the fencing
+            // token, so our conditional update matched nothing). It is running now.
+            throw new ConflictException("This request has started and can no longer be cancelled.", "not_cancellable");
+        }
+
+        return await GetAsync(id, ct);
+    }
+
+    private Task CancelQueuedAsync(Guid id, CancellationToken ct) =>
+        unitOfWork.ExecuteInTransactionAsync(async token =>
+        {
+            var job = await db.Jobs.SingleAsync(j => j.ApiRequestId == id, token);
+            var request = await db.ApiRequests.SingleAsync(r => r.Id == id, token);
+
+            if (job.Status != JobStatus.Queued)
+            {
+                throw new ConflictException(
+                    $"This request is {request.Status} and can no longer be cancelled.", "not_cancellable");
+            }
+
+            if (request.PriceVersionId is not null)
+            {
+                await ledger.ReleaseAsync(id, "cancelled", token);
+                request.BillingState = BillingState.Released;
+            }
+
+            var now = clock.GetUtcNow();
+            request.Status = ApiRequestStatus.Cancelled;
+            request.CompletedAt = now;
+            request.ErrorCode = "cancelled";
+
+            // Saved conditionally on the fencing token read above: if a worker claimed the job in
+            // the meantime this update matches nothing and the whole cancellation rolls back.
+            job.Status = JobStatus.Cancelled;
+            job.CompletedAt = now;
+            job.InputEnvelope = null;
+            job.InputKeyId = null;
+            return true;
+        }, ct);
+
+    private static string InlineWorkerId => $"api:{System.Environment.MachineName}";
+
+    private static bool IsTerminal(ApiRequestStatus status) =>
+        status is ApiRequestStatus.Succeeded or ApiRequestStatus.Failed or ApiRequestStatus.Cancelled
+            or ApiRequestStatus.NeedsReview;
 
     /// <summary>Request metadata. Never includes the result payload.</summary>
     public async Task<ApiRequestSummary?> GetAsync(Guid id, CancellationToken ct)
@@ -231,9 +359,11 @@ public sealed class ProductRequestService(
         return requests.Select(ToSummary).ToList();
     }
 
-    private async Task<ApiRequest?> FindReadableAsync(Guid id, bool resultAccess, CancellationToken ct)
+    private async Task<ApiRequest?> FindReadableAsync(
+        Guid id, bool resultAccess, CancellationToken ct, OrganizationPermission? requiredInstead = null)
     {
-        var caller = await ResolveCallerAsync(null, ReadPermissions(resultAccess), ct);
+        var caller = await ResolveCallerAsync(null,
+            requiredInstead is { } permission ? [permission] : ReadPermissions(resultAccess), ct);
 
         // The workspace query filter already confines this to the caller's workspace; a request
         // from another workspace or company is simply not found.
@@ -258,7 +388,7 @@ public sealed class ProductRequestService(
             ? [OrganizationPermission.ViewResults]
             : [OrganizationPermission.ViewResults, OrganizationPermission.ViewRequestDiagnostics];
 
-    private async Task<ApiRequestEnvelope?> FindReplayAsync(
+    private async Task<ExecutionResult?> FindReplayAsync(
         Caller caller,
         string productSlug,
         string version,
@@ -290,7 +420,10 @@ public sealed class ProductRequestService(
                 "This Idempotency-Key was already used with a different request.", "idempotency_key_reused");
         }
 
-        return ToEnvelope(existing, includeResult: existing.ResultExpiresAt > clock.GetUtcNow());
+        return new ExecutionResult(
+            ToEnvelope(existing, includeResult: existing.ResultExpiresAt > clock.GetUtcNow()),
+            Replayed: true,
+            Accepted: !IsTerminal(existing.Status));
     }
 
     private async Task<Caller> ResolveCallerAsync(
@@ -339,12 +472,19 @@ public sealed class ProductRequestService(
             r.ReviewRequired,
             [],
             new UsageInfo(r.UsageUnit, r.UsageQuantity),
-            new BillingInfo(r.BillingState, r.Currency, r.BillingAmount));
+            Billing(r),
+            r.ErrorCode);
 
     private ApiRequestSummary ToSummary(ApiRequest r) =>
         new(r.Id, r.ProductSlug, r.ProductVersion, r.Environment, r.Status, r.Channel, r.ApiKeyId, r.ActorUserId,
             r.CreatedAt, r.CompletedAt,
             new UsageInfo(r.UsageUnit, r.UsageQuantity),
-            new BillingInfo(r.BillingState, r.Currency, r.BillingAmount),
-            ResultAvailable: r.ResultJson is not null && r.ResultExpiresAt > clock.GetUtcNow());
+            Billing(r),
+            ResultAvailable: r.ResultJson is not null && r.ResultExpiresAt > clock.GetUtcNow(),
+            Error: r.ErrorCode);
+
+    /// <summary>Amount is what was charged; while money is only held, the held maximum is shown separately.</summary>
+    private static BillingInfo Billing(ApiRequest r) =>
+        new(r.BillingState, r.Currency, r.BillingAmount,
+            r.BillingState == BillingState.Reserved ? r.ReservedAmount : null);
 }

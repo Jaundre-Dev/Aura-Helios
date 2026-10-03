@@ -1,6 +1,7 @@
 using Helios.Domain.ApiKeys;
 using Helios.Domain.Billing;
 using Helios.Domain.Catalogue;
+using Helios.Domain.Execution;
 using Helios.Domain.Identity;
 using Helios.Domain.Platform;
 using Helios.Domain.Requests;
@@ -34,6 +35,14 @@ public interface IHeliosDbContext
     DbSet<ApiKey> ApiKeys { get; }
     DbSet<ApiRequest> ApiRequests { get; }
     DbSet<BillingProfile> BillingProfiles { get; }
+
+    DbSet<LedgerAccount> LedgerAccounts { get; }
+    DbSet<LedgerTransaction> LedgerTransactions { get; }
+    DbSet<LedgerEntry> LedgerEntries { get; }
+    DbSet<Reservation> Reservations { get; }
+    DbSet<PriceVersion> PriceVersions { get; }
+    DbSet<UsageEvent> UsageEvents { get; }
+    DbSet<Job> Jobs { get; }
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }

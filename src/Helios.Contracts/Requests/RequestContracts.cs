@@ -31,7 +31,7 @@ public enum BillingState
 
 public sealed record UsageInfo(string Unit, decimal Quantity);
 
-public sealed record BillingInfo(BillingState State, string Currency, decimal Amount);
+public sealed record BillingInfo(BillingState State, string Currency, decimal Amount, decimal? Reserved = null);
 
 /// <summary>
 /// The envelope every product execution returns, synchronous or not (plan section 8). A business
@@ -51,7 +51,8 @@ public sealed record ApiRequestEnvelope(
     bool ReviewRequired,
     IReadOnlyList<string> EvidenceReferences,
     UsageInfo Usage,
-    BillingInfo Billing);
+    BillingInfo Billing,
+    string? Error = null);
 
 /// <summary>Request metadata without the result payload, for history and diagnostics.</summary>
 public sealed record ApiRequestSummary(
@@ -67,4 +68,5 @@ public sealed record ApiRequestSummary(
     DateTimeOffset? CompletedAt,
     UsageInfo Usage,
     BillingInfo Billing,
-    bool ResultAvailable);
+    bool ResultAvailable,
+    string? Error = null);

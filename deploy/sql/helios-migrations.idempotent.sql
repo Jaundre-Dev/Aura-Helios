@@ -1542,5 +1542,512 @@ DELIMITER ;
 CALL MigrationsScript();
 DROP PROCEDURE MigrationsScript;
 
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    ALTER TABLE `api_requests` ADD `price_version_id` binary(16) NULL;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    ALTER TABLE `api_requests` ADD `reserved_amount` decimal(19,6) NULL;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE TABLE `jobs` (
+        `id` binary(16) NOT NULL,
+        `api_request_id` binary(16) NOT NULL,
+        `organization_id` binary(16) NOT NULL,
+        `workspace_id` binary(16) NOT NULL,
+        `product_slug` varchar(100) CHARACTER SET utf8mb4 NOT NULL,
+        `product_version` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `status` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `phase` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `attempts` int NOT NULL,
+        `max_attempts` int NOT NULL,
+        `reconcile_attempts` int NOT NULL,
+        `available_at` datetime(6) NOT NULL,
+        `lease_owner` varchar(200) CHARACTER SET utf8mb4 NULL,
+        `lease_expires_at` datetime(6) NULL,
+        `fencing_token` bigint NOT NULL,
+        `execution_started_at` datetime(6) NULL,
+        `input_envelope` mediumblob NULL,
+        `input_key_id` varchar(64) CHARACTER SET utf8mb4 NULL,
+        `provider_reference` varchar(200) CHARACTER SET utf8mb4 NULL,
+        `last_error` varchar(1000) CHARACTER SET utf8mb4 NULL,
+        `created_at` datetime(6) NOT NULL,
+        `completed_at` datetime(6) NULL,
+        CONSTRAINT `pk_jobs` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_jobs_api_requests_api_request_id` FOREIGN KEY (`api_request_id`) REFERENCES `api_requests` (`id`) ON DELETE RESTRICT,
+        CONSTRAINT `fk_jobs_workspaces_workspace_id` FOREIGN KEY (`workspace_id`) REFERENCES `workspaces` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE TABLE `ledger_accounts` (
+        `id` binary(16) NOT NULL,
+        `organization_id` binary(16) NOT NULL,
+        `type` varchar(30) CHARACTER SET utf8mb4 NOT NULL,
+        `currency` varchar(3) CHARACTER SET utf8mb4 NOT NULL,
+        `balance` decimal(19,6) NOT NULL,
+        `created_at` datetime(6) NOT NULL,
+        CONSTRAINT `pk_ledger_accounts` PRIMARY KEY (`id`)
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE TABLE `ledger_transactions` (
+        `id` binary(16) NOT NULL,
+        `type` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `posting_key` varchar(150) CHARACTER SET utf8mb4 NOT NULL,
+        `organization_id` binary(16) NULL,
+        `api_request_id` binary(16) NULL,
+        `payment_id` binary(16) NULL,
+        `reverses_transaction_id` binary(16) NULL,
+        `description` varchar(500) CHARACTER SET utf8mb4 NOT NULL,
+        `currency` varchar(3) CHARACTER SET utf8mb4 NOT NULL,
+        `created_at` datetime(6) NOT NULL,
+        `created_by` binary(16) NULL,
+        CONSTRAINT `pk_ledger_transactions` PRIMARY KEY (`id`)
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE TABLE `price_versions` (
+        `id` binary(16) NOT NULL,
+        `product_id` binary(16) NOT NULL,
+        `environment` varchar(10) CHARACTER SET utf8mb4 NOT NULL,
+        `currency` varchar(3) CHARACTER SET utf8mb4 NOT NULL,
+        `unit` varchar(50) CHARACTER SET utf8mb4 NOT NULL,
+        `unit_price` decimal(19,6) NOT NULL,
+        `minimum_charge` decimal(19,6) NOT NULL,
+        `tax_treatment` varchar(50) CHARACTER SET utf8mb4 NOT NULL,
+        `effective_from` datetime(6) NOT NULL,
+        `effective_to` datetime(6) NULL,
+        `created_at` datetime(6) NOT NULL,
+        `created_by` binary(16) NULL,
+        CONSTRAINT `pk_price_versions` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_price_versions_api_products_product_id` FOREIGN KEY (`product_id`) REFERENCES `api_products` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE TABLE `reservations` (
+        `id` binary(16) NOT NULL,
+        `organization_id` binary(16) NOT NULL,
+        `api_request_id` binary(16) NOT NULL,
+        `amount` decimal(19,6) NOT NULL,
+        `currency` varchar(3) CHARACTER SET utf8mb4 NOT NULL,
+        `state` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `settled_amount` decimal(19,6) NULL,
+        `created_at` datetime(6) NOT NULL,
+        `resolved_at` datetime(6) NULL,
+        CONSTRAINT `pk_reservations` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_reservations_api_requests_api_request_id` FOREIGN KEY (`api_request_id`) REFERENCES `api_requests` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE TABLE `ledger_entries` (
+        `id` binary(16) NOT NULL,
+        `transaction_id` binary(16) NOT NULL,
+        `account_id` binary(16) NOT NULL,
+        `amount` decimal(19,6) NOT NULL,
+        CONSTRAINT `pk_ledger_entries` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_ledger_entries_ledger_accounts_account_id` FOREIGN KEY (`account_id`) REFERENCES `ledger_accounts` (`id`) ON DELETE RESTRICT,
+        CONSTRAINT `fk_ledger_entries_ledger_transactions_transaction_id` FOREIGN KEY (`transaction_id`) REFERENCES `ledger_transactions` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE TABLE `usage_events` (
+        `id` binary(16) NOT NULL,
+        `organization_id` binary(16) NOT NULL,
+        `workspace_id` binary(16) NOT NULL,
+        `api_request_id` binary(16) NOT NULL,
+        `product_id` binary(16) NOT NULL,
+        `product_slug` varchar(100) CHARACTER SET utf8mb4 NOT NULL,
+        `product_version` varchar(20) CHARACTER SET utf8mb4 NOT NULL,
+        `environment` varchar(10) CHARACTER SET utf8mb4 NOT NULL,
+        `price_version_id` binary(16) NULL,
+        `unit` varchar(50) CHARACTER SET utf8mb4 NOT NULL,
+        `quantity` decimal(19,6) NOT NULL,
+        `amount` decimal(19,6) NOT NULL,
+        `currency` varchar(3) CHARACTER SET utf8mb4 NOT NULL,
+        `occurred_at` datetime(6) NOT NULL,
+        CONSTRAINT `pk_usage_events` PRIMARY KEY (`id`),
+        CONSTRAINT `fk_usage_events_api_requests_api_request_id` FOREIGN KEY (`api_request_id`) REFERENCES `api_requests` (`id`) ON DELETE RESTRICT,
+        CONSTRAINT `fk_usage_events_price_versions_price_version_id` FOREIGN KEY (`price_version_id`) REFERENCES `price_versions` (`id`) ON DELETE RESTRICT
+    ) CHARACTER SET=utf8mb4;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_api_requests_price_version_id` ON `api_requests` (`price_version_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE UNIQUE INDEX `ix_jobs_api_request_id` ON `jobs` (`api_request_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_jobs_status_available_at` ON `jobs` (`status`, `available_at`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_jobs_status_lease_expires_at` ON `jobs` (`status`, `lease_expires_at`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_jobs_workspace_id` ON `jobs` (`workspace_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE UNIQUE INDEX `ix_ledger_accounts_organization_id_type_currency` ON `ledger_accounts` (`organization_id`, `type`, `currency`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_ledger_entries_account_id` ON `ledger_entries` (`account_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_ledger_entries_transaction_id` ON `ledger_entries` (`transaction_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_ledger_transactions_api_request_id` ON `ledger_transactions` (`api_request_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_ledger_transactions_organization_id_created_at` ON `ledger_transactions` (`organization_id`, `created_at`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_ledger_transactions_payment_id` ON `ledger_transactions` (`payment_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE UNIQUE INDEX `ix_ledger_transactions_posting_key` ON `ledger_transactions` (`posting_key`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE UNIQUE INDEX `ix_price_versions_product_id_environment_effective_from` ON `price_versions` (`product_id`, `environment`, `effective_from`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE UNIQUE INDEX `ix_reservations_api_request_id` ON `reservations` (`api_request_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_reservations_organization_id_state` ON `reservations` (`organization_id`, `state`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE UNIQUE INDEX `ix_usage_events_api_request_id` ON `usage_events` (`api_request_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_usage_events_organization_id_occurred_at` ON `usage_events` (`organization_id`, `occurred_at`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    CREATE INDEX `ix_usage_events_price_version_id` ON `usage_events` (`price_version_id`);
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    ALTER TABLE `api_requests` ADD CONSTRAINT `fk_api_requests_price_versions_price_version_id` FOREIGN KEY (`price_version_id`) REFERENCES `price_versions` (`id`) ON DELETE RESTRICT;
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
+DROP PROCEDURE IF EXISTS MigrationsScript;
+DELIMITER //
+CREATE PROCEDURE MigrationsScript()
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM `__helios_migrations_history` WHERE `MigrationId` = '20261003102644_LedgerPricingAndJobs') THEN
+
+    INSERT INTO `__helios_migrations_history` (`MigrationId`, `ProductVersion`)
+    VALUES ('20261003102644_LedgerPricingAndJobs', '9.0.19');
+
+    END IF;
+END //
+DELIMITER ;
+CALL MigrationsScript();
+DROP PROCEDURE MigrationsScript;
+
 COMMIT;
 

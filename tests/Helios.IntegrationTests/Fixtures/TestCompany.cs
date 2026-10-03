@@ -57,6 +57,27 @@ public sealed class TestCompany
         return (await response.Content.ReadFromJsonAsync<CreatedApiKeyResponse>())!;
     }
 
+    public async Task EnableAsync(string slug, ApiEnvironment environment)
+    {
+        (await Owner.Client.PostAsJsonAsync($"/api/v1/organizations/{Organization.Id}/entitlements",
+            new EnableEntitlementRequest(slug, environment))).EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Enables the products for live and returns a live key scoped to them.</summary>
+    public async Task<CreatedApiKeyResponse> CreateLiveKeyAsync(params string[] scopes)
+    {
+        foreach (var slug in scopes)
+        {
+            await EnableAsync(slug, ApiEnvironment.Live);
+        }
+
+        var response = await Owner.Client.PostAsJsonAsync("/api/v1/api-keys",
+            new CreateApiKeyRequest($"live {Guid.NewGuid():N}", ApiEnvironment.Live, scopes));
+        response.EnsureSuccessStatusCode();
+
+        return (await response.Content.ReadFromJsonAsync<CreatedApiKeyResponse>())!;
+    }
+
     /// <summary>A client authenticating only with the given API key.</summary>
     public HttpClient KeyClient(string secret)
     {

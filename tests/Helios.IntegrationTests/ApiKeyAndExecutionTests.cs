@@ -379,7 +379,10 @@ public sealed class ApiKeyAndExecutionTests(HeliosApiFactory factory)
             return company.KeyClient(key.Secret).SendAsync(message);
         }));
 
-        Assert.All(responses, r => Assert.Equal(HttpStatusCode.OK, r.StatusCode));
+        // The first completes (200); duplicates replay the original — 202 while it is still in flight,
+        // 200 once finished — and are marked as replays. None runs a second time.
+        Assert.All(responses, r => Assert.Contains(r.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.Accepted }));
+        Assert.Single(responses, r => !r.Headers.Contains("Idempotent-Replayed"));
         var ids = await Task.WhenAll(responses.Select(async r => (await r.Content.ReadFromJsonAsync<ApiRequestEnvelope>())!.RequestId));
         Assert.Single(ids.Distinct());
 

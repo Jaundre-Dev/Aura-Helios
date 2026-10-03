@@ -1,4 +1,8 @@
+using Helios.Application.Abstractions.Execution;
 using Helios.Application.Abstractions.Persistence;
+using Helios.Application.Features.Execution;
+using Helios.Application.Features.Requests;
+using Helios.Infrastructure.Execution;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Abstractions.Storage;
 using Helios.Infrastructure.Security;
@@ -59,9 +63,39 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton(sp => SecretKeyring.FromConfiguration(sp.GetRequiredService<IConfiguration>()));
         services.AddScoped<ISecretStore, MySqlSecretStore>();
         services.AddSingleton<IRequestFingerprinter, HmacRequestFingerprinter>();
+        services.AddSingleton<IPayloadProtector, KeyringPayloadProtector>();
+
+        // Durable job queue (P2): MySQL rows, SKIP LOCKED claims, leases and fencing tokens.
+        services.AddScoped<IJobQueue, MySqlJobQueue>();
 
         // Tenant-scoped object storage for run outputs and uploads (WP0.7).
         services.AddScoped<IObjectStore, MySqlObjectStore>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Execution timing and result retention, shared by the API (inline execution) and the worker
+    /// so both apply the same rules. Bound from <c>Helios:Execution</c> and <c>Helios:Requests</c>.
+    /// </summary>
+    public static IServiceCollection AddHeliosExecution(this IServiceCollection services, IConfiguration configuration)
+    {
+        var execution = configuration.GetSection("Helios:Execution");
+        var defaults = new ExecutionPolicy();
+
+        services.AddSingleton(new ExecutionPolicy
+        {
+            Lease = TimeSpan.FromSeconds(execution.GetValue("LeaseSeconds", defaults.Lease.TotalSeconds)),
+            RetryBaseDelay = TimeSpan.FromSeconds(execution.GetValue("RetryBaseDelaySeconds", defaults.RetryBaseDelay.TotalSeconds)),
+            ReconcileDelay = TimeSpan.FromSeconds(execution.GetValue("ReconcileDelaySeconds", defaults.ReconcileDelay.TotalSeconds)),
+            MaxReconcileAttempts = execution.GetValue("MaxReconcileAttempts", defaults.MaxReconcileAttempts)
+        });
+
+        // Result payloads are personal data for most products; keep them only as long as configured.
+        services.AddSingleton(new RequestRetentionPolicy(
+            TimeSpan.FromDays(configuration.GetValue("Helios:Requests:ResultRetentionDays", 30))));
+
+        services.AddHostedService<ProductionSafetyCheck>();
 
         return services;
     }

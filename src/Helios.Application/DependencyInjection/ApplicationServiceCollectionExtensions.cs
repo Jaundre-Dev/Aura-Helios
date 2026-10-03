@@ -2,6 +2,7 @@ using FluentValidation;
 using Helios.Application.Features.ApiKeys;
 using Helios.Application.Features.Billing;
 using Helios.Application.Features.Catalogue;
+using Helios.Application.Features.Execution;
 using Helios.Application.Features.Identity;
 using Helios.Application.Features.Products;
 using Helios.Application.Features.Products.Identity;
@@ -29,6 +30,11 @@ public static class ApplicationServiceCollectionExtensions
         services.AddScoped<ApiKeyService>();
         services.AddScoped<ProductRequestService>();
         services.AddScoped<BillingProfileService>();
+
+        services.AddScoped<LedgerService>();
+        services.AddScoped<PriceService>();
+        services.AddScoped<JobRunner>();
+        services.AddSingleton<JobWorker>();
 
         // First-party product executors. Each callable catalogue product needs exactly one here.
         services.AddSingleton<IProductExecutor, SaIdValidateExecutor>();

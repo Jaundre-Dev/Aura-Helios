@@ -3,6 +3,7 @@ using Helios.Application.Abstractions.Security;
 using Helios.Domain.ApiKeys;
 using Helios.Domain.Billing;
 using Helios.Domain.Catalogue;
+using Helios.Domain.Execution;
 using Helios.Domain.Identity;
 using Helios.Domain.Platform;
 using Helios.Domain.Requests;
@@ -39,6 +40,13 @@ public class HeliosDbContext(
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
     public DbSet<ApiRequest> ApiRequests => Set<ApiRequest>();
     public DbSet<BillingProfile> BillingProfiles => Set<BillingProfile>();
+    public DbSet<LedgerAccount> LedgerAccounts => Set<LedgerAccount>();
+    public DbSet<LedgerTransaction> LedgerTransactions => Set<LedgerTransaction>();
+    public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
+    public DbSet<Reservation> Reservations => Set<Reservation>();
+    public DbSet<PriceVersion> PriceVersions => Set<PriceVersion>();
+    public DbSet<UsageEvent> UsageEvents => Set<UsageEvent>();
+    public DbSet<Job> Jobs => Set<Job>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -108,5 +116,13 @@ public class HeliosDbContext(
 
         modelBuilder.Entity<ApiRequest>()
             .HasQueryFilter(r => _workspaceContext.IsSystem || r.WorkspaceId == _workspaceContext.WorkspaceId);
+
+        // Workers process each job in a scope confined to that job's workspace, so a job can
+        // only ever read and write its own tenant's rows.
+        modelBuilder.Entity<Job>()
+            .HasQueryFilter(j => _workspaceContext.IsSystem || j.WorkspaceId == _workspaceContext.WorkspaceId);
+
+        modelBuilder.Entity<UsageEvent>()
+            .HasQueryFilter(u => _workspaceContext.IsSystem || u.WorkspaceId == _workspaceContext.WorkspaceId);
     }
 }

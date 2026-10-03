@@ -19,10 +19,11 @@ public sealed class CatalogueAndEntitlementTests(HeliosApiFactory factory)
     [Fact]
     public async Task The_catalogue_lists_the_initial_twelve_with_only_the_id_utility_callable_in_sandbox()
     {
-        var products = await _factory.CreateClient()
+        var listed = await _factory.CreateClient()
             .GetFromJsonAsync<List<ProductSummaryResponse>>("/api/v1/catalogue");
 
-        Assert.NotNull(products);
+        // test.* products exist only in the integration test database.
+        var products = listed!.Where(p => !p.Slug.StartsWith("test.", StringComparison.Ordinal)).ToList();
         Assert.Equal(12, products.Count);
 
         var callable = Assert.Single(products, p => p.CallableInSandbox);

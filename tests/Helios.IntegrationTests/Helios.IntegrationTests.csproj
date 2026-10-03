@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Helios.Api\Helios.Api.csproj" />
     <ProjectReference Include="..\..\src\Helios.Infrastructure\Helios.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Helios.Worker\Helios.Worker.csproj" />
   </ItemGroup>
 
 </Project>

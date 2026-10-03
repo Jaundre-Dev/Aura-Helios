@@ -23,6 +23,16 @@ public sealed class SaIdValidateExecutor(TimeProvider clock) : IProductExecutor
 
     public string ProductSlug => Slug;
     public string Version => CurrentVersion;
+    public ExecutionMode Mode => ExecutionMode.Synchronous;
+
+    /// <summary>Pure computation with no provider: repeating it is harmless.</summary>
+    public bool SafeToRepeat => true;
+
+    public decimal EstimateMaxUnits(ParsedProductInput input) => 1m;
+
+    /// <summary>Nothing external to ask; an interrupted attempt is simply run again.</summary>
+    public Task<ReconcileOutcome> ReconcileAsync(string? providerReference, ProductExecutionContext context, CancellationToken cancellationToken) =>
+        Task.FromResult(ReconcileOutcome.NotCompleted);
 
     public ParsedProductInput Parse(JsonElement body)
     {
@@ -62,7 +72,7 @@ public sealed class SaIdValidateExecutor(TimeProvider clock) : IProductExecutor
 
     public Task<ProductOutcome> ExecuteAsync(
         ParsedProductInput input,
-        ApiEnvironment environment,
+        ProductExecutionContext context,
         CancellationToken cancellationToken)
     {
         var today = DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime);
