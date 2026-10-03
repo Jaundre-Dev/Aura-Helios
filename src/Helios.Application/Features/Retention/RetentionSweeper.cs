@@ -2,22 +2,26 @@ using Helios.Application.Abstractions.Execution;
 using Helios.Application.Abstractions.Persistence;
 using Helios.Application.Abstractions.Security;
 using Helios.Application.Abstractions.Storage;
+using Helios.Application.Features.Webhooks;
+using Helios.Domain.Webhooks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Helios.Application.Features.Retention;
 
 /// <summary>
-/// Enforces retention (plan section 13): deletes uploaded document content and stored result
-/// payloads once they expire, keeping the metadata needed for billing and audit. Finding what is due
-/// is the only cross-tenant step; each workspace's deletions run in a scope confined to it.
+/// Enforces retention (plan section 13): deletes uploaded document content, stored result payloads
+/// and corrected values once they expire, keeping the metadata needed for billing and audit, and
+/// deletes finished webhook deliveries after <see cref="WebhookPolicy.DeliveryRetention"/>. Finding
+/// what is due is the only cross-tenant step; each workspace's deletions run in a scope confined to it.
 /// </summary>
-public sealed class RetentionSweeper(ITenantScopeFactory scopes, TimeProvider clock)
+public sealed class RetentionSweeper(ITenantScopeFactory scopes, WebhookPolicy webhooks, TimeProvider clock)
 {
-    /// <returns>The number of uploads and results purged.</returns>
+    /// <returns>The number of uploads, results, corrections and deliveries purged.</returns>
     public async Task<int> SweepAsync(int maxWorkspaces, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
+        var deliveriesBefore = now - webhooks.DeliveryRetention;
         List<Guid> workspaces;
 
         using (var system = scopes.CreateSystem())
@@ -37,20 +41,25 @@ public sealed class RetentionSweeper(ITenantScopeFactory scopes, TimeProvider cl
                             db.ApiRequests.Any(r => r.Id == d.ApiRequestId && r.ResultExpiresAt <= now))
                 .Select(d => d.WorkspaceId);
 
-            workspaces = await withUploads.Union(withResults).Union(withCorrections).Distinct().Take(maxWorkspaces).ToListAsync(ct);
+            var withDeliveries = db.WebhookDeliveries
+                .Where(d => d.Status != WebhookDeliveryStatus.Pending && d.CreatedAt <= deliveriesBefore)
+                .Select(d => d.WorkspaceId);
+
+            workspaces = await withUploads.Union(withResults).Union(withCorrections).Union(withDeliveries)
+                .Distinct().Take(maxWorkspaces).ToListAsync(ct);
         }
 
         var purged = 0;
         foreach (var workspaceId in workspaces)
         {
             using var tenant = scopes.CreateForWorkspace(workspaceId);
-            purged += await SweepWorkspaceAsync(tenant.ServiceProvider, now, ct);
+            purged += await SweepWorkspaceAsync(tenant.ServiceProvider, now, deliveriesBefore, ct);
         }
 
         return purged;
     }
 
-    private static async Task<int> SweepWorkspaceAsync(IServiceProvider services, DateTimeOffset now, CancellationToken ct)
+    private static async Task<int> SweepWorkspaceAsync(IServiceProvider services, DateTimeOffset now, DateTimeOffset deliveriesBefore, CancellationToken ct)
     {
         var db = services.GetRequiredService<IHeliosDbContext>();
         var store = services.GetRequiredService<IObjectStore>();
@@ -86,6 +95,13 @@ public sealed class RetentionSweeper(ITenantScopeFactory scopes, TimeProvider cl
                 .SetProperty(d => d.CorrectionsJson, (string?)null)
                 .SetProperty(d => d.PurgedAt, now), ct);
 
-        return uploads.Count + results + corrections;
+        // Finished deliveries are operational history, not records the business must keep. Pending
+        // ones are never touched: they are the outbox.
+        var deliveries = await db.WebhookDeliveries
+            .Where(d => d.Status != WebhookDeliveryStatus.Pending && d.CreatedAt <= deliveriesBefore)
+            .Take(1000)
+            .ExecuteDeleteAsync(ct);
+
+        return uploads.Count + results + corrections + deliveries;
     }
 }

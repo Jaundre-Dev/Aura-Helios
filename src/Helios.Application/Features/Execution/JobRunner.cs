@@ -41,6 +41,7 @@ public sealed class JobRunner(
     RequestRetentionPolicy retention,
     WebhookOutbox outbox,
     IUploadAccess uploads,
+    IJobLeases leases,
     TimeProvider clock)
 {
     /// <summary>A job claim that another worker superseded. Nothing was committed.</summary>
@@ -89,9 +90,15 @@ public sealed class JobRunner(
         await db.SaveChangesAsync(ct);
 
         ProductOutcome outcome;
+        await using var heartbeat = LeaseHeartbeat.Start(leases, claim, policy, clock, ct);
         try
         {
-            outcome = await executor.ExecuteAsync(input, context, ct);
+            outcome = await executor.ExecuteAsync(input, context, heartbeat.Token);
+        }
+        catch (OperationCanceledException) when (heartbeat.LeaseLost && !ct.IsCancellationRequested)
+        {
+            // Another worker owns the job now. Commit nothing; the new owner reconciles or re-runs.
+            throw new StaleClaimException();
         }
         catch (ProviderOutcomeUnknownException ex)
         {
@@ -119,9 +126,14 @@ public sealed class JobRunner(
         await db.SaveChangesAsync(ct);
 
         ReconcileOutcome outcome;
+        await using var heartbeat = LeaseHeartbeat.Start(leases, claim, policy, clock, ct);
         try
         {
-            outcome = await executor.ReconcileAsync(job.ProviderReference, context, ct);
+            outcome = await executor.ReconcileAsync(job.ProviderReference, context, heartbeat.Token);
+        }
+        catch (OperationCanceledException) when (heartbeat.LeaseLost && !ct.IsCancellationRequested)
+        {
+            throw new StaleClaimException();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -75,6 +75,7 @@ public static class InfrastructureServiceCollectionExtensions
 
         // Durable job queue (P2): MySQL rows, SKIP LOCKED claims, leases and fencing tokens.
         services.AddScoped<IJobQueue, MySqlJobQueue>();
+        services.AddSingleton<IJobLeases, MySqlJobLeases>();
 
         // Tenant-scoped object storage for run outputs and uploads (WP0.7).
         services.AddScoped<IObjectStore, MySqlObjectStore>();
@@ -94,6 +95,7 @@ public static class InfrastructureServiceCollectionExtensions
         services.AddSingleton(new ExecutionPolicy
         {
             Lease = TimeSpan.FromSeconds(execution.GetValue("LeaseSeconds", defaults.Lease.TotalSeconds)),
+            LeaseRenewal = execution.GetValue<double?>("LeaseRenewalSeconds") is { } renew ? TimeSpan.FromSeconds(renew) : null,
             RetryBaseDelay = TimeSpan.FromSeconds(execution.GetValue("RetryBaseDelaySeconds", defaults.RetryBaseDelay.TotalSeconds)),
             ReconcileDelay = TimeSpan.FromSeconds(execution.GetValue("ReconcileDelaySeconds", defaults.ReconcileDelay.TotalSeconds)),
             MaxReconcileAttempts = execution.GetValue("MaxReconcileAttempts", defaults.MaxReconcileAttempts)
@@ -161,6 +163,7 @@ public static class InfrastructureServiceCollectionExtensions
         {
             MaxAttempts = section.GetValue("MaxAttempts", defaults.MaxAttempts),
             BaseDelay = TimeSpan.FromSeconds(section.GetValue("BaseDelaySeconds", defaults.BaseDelay.TotalSeconds)),
+            DeliveryRetention = TimeSpan.FromDays(section.GetValue("DeliveryRetentionDays", defaults.DeliveryRetention.TotalDays)),
         });
 
         services.AddHttpClient(GuardedWebhookSender.ClientName)

@@ -18,7 +18,7 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | --- | --- | --- |
 | P0 Safe foundation | Backend complete; gate **not fully passed** | Backend build, unit, architecture and disposable-database integration tests pass (slice P0.1 below). Outstanding: frontend lockfile + production build (no npm on this machine), Docker image builds (no Docker on this machine) |
 | P1 Portal/catalogue/keys | Backend complete; gate **not passed** | API side of the gate passes (slice P1.1 below). Outstanding: functional portal pages (sign-in, company, team, catalogue, keys) — blocked on Node.js/npm |
-| P2 Jobs/usage/billing | **Gate items pass (API)**; scope gaps listed | All six P2 gate conditions are covered by passing integration tests (slices P2.1–P2.3). Platform administration API with TOTP step-up added (P2.4). Not done: invoices (blocked on accounting confirmation of tax-invoice rules), a real payment gateway (blocked on contract), portal and admin views (blocked on Node.js) |
+| P2 Jobs/usage/billing | **Gate items pass (API)**; scope gaps listed | All six P2 gate conditions are covered by passing integration tests (slices P2.1–P2.3). Platform administration API with TOTP step-up (P2.4); lease renewal and delivery retention (P2.5). Not done: invoices (blocked on accounting confirmation of tax-invoice rules), a real payment gateway (blocked on contract), portal and admin views (blocked on Node.js) |
 | P3 Document products | In progress (gate not passed) | Safe uploads (P3.1); ocr.general and documents.invoice v1 (P3.2); bank statement, payslip, proof of address and classification v1 (P3.3) — native PDFs, sandbox only; review corrections and export (P3.4). Gate needs an owner-approved representative dataset, written targets and an OCR engine decision |
 | P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
@@ -386,6 +386,22 @@ Forward migration `20261003142237_ReviewDecisions`: `review_decisions` (FK to `a
 | `dotnet build Helios.sln` | Succeeded, 0 warnings, 0 errors |
 | `dotnet test Helios.sln --no-build` | UnitTests 160, ArchitectureTests 4, IntegrationTests 213 — all passed |
 | Mutation: key environment/scope check on review removed | `Only_reviewing_roles_review_and_only_result_readers_export` failed as intended; restored |
+
+## Slice P2.5 — lease renewal and delivery retention (2026-10-03)
+
+- **Lease renewal**: while an executor (or a reconciliation call) runs, a heartbeat extends the job's lease every `Helios:Execution:LeaseRenewalSeconds` (default a third of the lease). Each renewal is one conditional UPDATE on its own connection, matched on job id, fencing token and Running state. Long work is therefore no longer reclaimed and repeated after two minutes. If a renewal finds the lease taken over, the executor's cancellation token fires and the attempt commits nothing. The new owner reconciles or re-runs under the usual rules. A failed renewal (database blip) is retried at the next interval.
+- **Delivery retention**: the retention sweep deletes delivered and dead-lettered webhook deliveries older than `Helios:Webhooks:DeliveryRetentionDays` (default 30). Pending deliveries, which form the outbox, are never deleted.
+
+| Command | Result |
+| --- | --- |
+| `dotnet build Helios.sln` | Succeeded, 0 warnings, 0 errors |
+| `dotnet test Helios.sln --no-build` | UnitTests 160, ArchitectureTests 4, IntegrationTests 216 — all passed |
+| Mutation: renewal reports success without updating | Both lease tests failed as intended; restored |
+
+`LeaseAndRetentionTests` cover three cases:
+- a held-open provider call whose lease visibly advances, then completes and settles once;
+- a takeover (fencing token moved) that cancels the executor, commits nothing, and is later recovered with exactly one usage row and one settlement;
+- old delivered and failed deliveries purged while old pending and recent ones are kept.
 
 ## Required update format for Claude
 

@@ -80,6 +80,19 @@ public sealed class TestProviderLog
     public ConcurrentDictionary<Guid, string> Scenarios { get; } = new();
 
     public int CallsFor(Guid requestId) => Calls.GetValueOrDefault(requestId);
+
+    /// <summary>Completed when a <c>slow</c> attempt has started calling the "provider".</summary>
+    public TaskCompletionSource Started(Guid requestId) =>
+        _started.GetOrAdd(requestId, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+
+    /// <summary>A <c>slow</c> attempt finishes when this is completed (or its token is cancelled).</summary>
+    public TaskCompletionSource Gate(Guid requestId) =>
+        _gates.GetOrAdd(requestId, _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
+
+    public ConcurrentDictionary<Guid, bool> Cancelled { get; } = new();
+
+    private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _started = new();
+    private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _gates = new();
 }
 
 /// <summary>
@@ -128,10 +141,31 @@ public sealed class TestProviderExecutor(TestProviderLog log) : IProductExecutor
 
             case "unavailable":
                 throw new ProviderUnavailableException("Simulated provider refusal.");
+
+            case "slow":
+                return SlowAsync(context.RequestId, units, ct);
         }
 
         log.CompletedAtProvider[context.RequestId] = true;
         return Task.FromResult(TestProducts.Outcome(units));
+    }
+
+    /// <summary>A long provider call: runs until the test opens the gate, or stops when cancelled.</summary>
+    private async Task<ProductOutcome> SlowAsync(Guid requestId, decimal units, CancellationToken ct)
+    {
+        log.Started(requestId).TrySetResult();
+        try
+        {
+            await log.Gate(requestId).Task.WaitAsync(ct);
+        }
+        catch (OperationCanceledException)
+        {
+            log.Cancelled[requestId] = true;
+            throw;
+        }
+
+        log.CompletedAtProvider[requestId] = true;
+        return TestProducts.Outcome(units);
     }
 
     public Task<ReconcileOutcome> ReconcileAsync(string? reference, ProductExecutionContext context, CancellationToken ct)

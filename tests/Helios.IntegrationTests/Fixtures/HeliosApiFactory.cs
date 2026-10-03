@@ -99,6 +99,9 @@ public sealed class HeliosApiFactory : WebApplicationFactory<Program>, IAsyncLif
         builder.UseSetting("Helios:Execution:ReconcileDelaySeconds", "0");
         builder.UseSetting("Helios:Execution:MaxReconcileAttempts", "3");
 
+        // Long-running attempts renew their lease quickly here, so renewal is observable in a test.
+        builder.UseSetting("Helios:Execution:LeaseRenewalSeconds", "0.2");
+
         builder.UseSetting("Helios:Webhooks:MaxAttempts", "3");
         builder.UseSetting("Helios:Webhooks:BaseDelaySeconds", "0");
 

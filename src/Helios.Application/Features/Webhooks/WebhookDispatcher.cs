@@ -21,6 +21,9 @@ public sealed record WebhookPolicy
 
     public TimeSpan Lease { get; init; } = TimeSpan.FromMinutes(1);
 
+    /// <summary>Finished (delivered or dead-lettered) deliveries are deleted after this long.</summary>
+    public TimeSpan DeliveryRetention { get; init; } = TimeSpan.FromDays(30);
+
     public TimeSpan DelayAfter(int attempts) =>
         TimeSpan.FromTicks(Math.Min(TimeSpan.FromHours(6).Ticks, BaseDelay.Ticks * (long)Math.Pow(4, Math.Max(0, attempts - 1))));
 }
