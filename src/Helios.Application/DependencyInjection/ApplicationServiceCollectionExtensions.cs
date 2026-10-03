@@ -56,6 +56,10 @@ public static class ApplicationServiceCollectionExtensions
         services.AddSingleton<IProductExecutor, SaIdValidateExecutor>();
         services.AddSingleton<IProductExecutor, OcrGeneralExecutor>();
         services.AddSingleton<IProductExecutor, InvoiceExtractionExecutor>();
+        services.AddSingleton<IProductExecutor, BankStatementExecutor>();
+        services.AddSingleton<IProductExecutor, PayslipExecutor>();
+        services.AddSingleton<IProductExecutor, ProofOfAddressExecutor>();
+        services.AddSingleton<IProductExecutor, DocumentClassifyExecutor>();
         services.AddSingleton<ProductExecutorRegistry>();
 
         return services;

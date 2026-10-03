@@ -17,7 +17,7 @@ public sealed class CatalogueAndEntitlementTests(HeliosApiFactory factory)
     private readonly HeliosApiFactory _factory = factory;
 
     [Fact]
-    public async Task The_catalogue_lists_the_initial_twelve_with_only_the_id_utility_callable_in_sandbox()
+    public async Task The_catalogue_lists_the_initial_twelve_with_only_implemented_products_callable_in_sandbox()
     {
         var listed = await _factory.CreateClient()
             .GetFromJsonAsync<List<ProductSummaryResponse>>("/api/v1/catalogue");
@@ -27,7 +27,11 @@ public sealed class CatalogueAndEntitlementTests(HeliosApiFactory factory)
         Assert.Equal(12, products.Count);
 
         // Implemented products are sandbox-only until measured; everything else is Planned.
-        string[] implemented = [TestCompany.SaIdProduct, "ocr.general", "documents.invoice"];
+        string[] implemented =
+        [
+            TestCompany.SaIdProduct, "ocr.general", "documents.invoice", "documents.bank-statement",
+            "documents.payslip", "documents.proof-of-address", "documents.classify"
+        ];
         Assert.Equal(implemented.Order(), products.Where(p => p.CallableInSandbox).Select(p => p.Slug).Order());
         Assert.All(products.Where(p => implemented.Contains(p.Slug)),
             p => Assert.Equal(ProductReleaseState.Sandbox, p.ReleaseState));

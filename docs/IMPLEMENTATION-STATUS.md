@@ -19,7 +19,7 @@ Updated: 2026-10-03. Authority: [root implementation plan](../HELIOS-IMPLEMENTAT
 | P0 Safe foundation | Backend complete; gate **not fully passed** | Backend build, unit, architecture and disposable-database integration tests pass (slice P0.1 below). Outstanding: frontend lockfile + production build (no npm on this machine), Docker image builds (no Docker on this machine) |
 | P1 Portal/catalogue/keys | Backend complete; gate **not passed** | API side of the gate passes (slice P1.1 below). Outstanding: functional portal pages (sign-in, company, team, catalogue, keys) — blocked on Node.js/npm |
 | P2 Jobs/usage/billing | **Gate items pass (API)**; scope gaps listed | All six P2 gate conditions are covered by passing integration tests (slices P2.1–P2.3). Platform administration API with TOTP step-up added (P2.4). Not done: invoices (blocked on accounting confirmation of tax-invoice rules), a real payment gateway (blocked on contract), portal and admin views (blocked on Node.js) |
-| P3 Document products | In progress (gate not passed) | Safe uploads (P3.1); ocr.general and documents.invoice v1 for native PDFs, sandbox only (P3.2). Gate needs an owner-approved representative dataset, written targets and an OCR engine decision |
+| P3 Document products | In progress (gate not passed) | Safe uploads (P3.1); ocr.general and documents.invoice v1 (P3.2); bank statement, payslip, proof of address and classification v1 (P3.3) — native PDFs, sandbox only. Gate needs an owner-approved representative dataset, written targets and an OCR engine decision |
 | P4 Verification partners | Blocked on contracts/credentials; not implemented | Typed adapters and honest unavailable states can proceed |
 | P5 Paid pilots/launch | Not started | Security, quality, economics and operational gates |
 | P6 Expansion | Backlog | Customer-led catalogue additions |
@@ -314,6 +314,43 @@ Unit tests check TOTP against the RFC 6238 SHA-1 vectors and RFC 4648 base32, pl
 - Customer MFA, email verification and password reset are still not built.
 - A refund and chargeback reversal policy needs an owner or accountant decision before those events can move money.
 - No two-person approval for large adjustments (the cap is the current control).
+
+## Slice P3.3 — statement, payslip, proof-of-address and classification v1 (2026-10-03)
+
+All four read the native PDF text layer with deterministic rules and are published as **Sandbox only** by the forward data migration `20261003141528_DocumentProductsV2`. They share the P3.2 path: asynchronous (202, then the worker), PDF only, caller's workspace and environment only, page limits enforced at acceptance, billed one document. A document with no text layer is `readable: false`, flagged for review and not charged. Values come only from labelled lines and carry page, box and source line as evidence; missing values are null and listed, never guessed.
+
+- **`documents.bank-statement`** (20 pages):
+  - Fields: institution (only a known SA bank name printed above the transactions), account holder, account number **masked to the last four digits in the value and the evidence**, period, opening and closing balances.
+  - Transactions: dated lines with amount, direction and running balance. Direction comes from a printed sign or Cr/Dr marker, or from the running balance; otherwise it is null and the statement is flagged.
+  - Year-less dates ("28 Dec") are read only inside the stated period.
+  - Checks: `balance_continuity`, `closing_balance_reconciles`, `dates_within_period`, `period_order`.
+- **`documents.payslip`** (5 pages):
+  - Fields: employer, employee, employee number, pay date, pay period, gross, total deductions, net, PAYE, UIF. Identity numbers are deliberately not extracted.
+  - Checks: `net_equals_gross_minus_deductions`, `net_not_above_gross`, `pay_date_in_period` (10-day grace, "differs").
+- **`documents.proof-of-address`** (5 pages):
+  - Fields: issuer and account holder (labelled only), the address block after an address label (ends at a four-digit postal code, at most 6 lines, one combined evidence box), postal code, document date ("Date of birth" is never taken as the date), masked account number.
+  - Checks: `not_future_dated`, `recent` (≤ 92 days; older is "differs" because acceptable age is the customer's policy), `postal_code_present`. It does not decide regulatory acceptability.
+- **`documents.classify`** (50 pages):
+  - Rule-based: it counts distinctive labels for invoice, bank_statement, payslip, proof_of_address and identity_document, each with evidence.
+  - A type is chosen only with at least 3 indicators and a lead of 2; otherwise it returns `unknown` and needs review. Scores are counts, not probabilities.
+  - Catalogue delivery is corrected from AI to Build.
+- `DocumentText` and `TextLayerProduct` hold the shared labelled-field, money and date parsing and the executor shape.
+
+### Validation (2026-10-03)
+
+| Command | Result |
+| --- | --- |
+| `dotnet build Helios.sln` | Succeeded, 0 warnings, 0 errors |
+| `dotnet test Helios.sln --no-build` | UnitTests 150, ArchitectureTests 4, IntegrationTests 203 — all passed |
+| Mutation: account-number masking returns the raw number | 5 unit tests and `A_statement_is_extracted_reconciled_and_masked` failed as intended; restored |
+
+Existing tests were updated where their premise changed: the catalogue honesty test now lists the seven implemented sandbox products, and the "planned product cannot execute" test uses `documents.sa-id`, which is still planned.
+
+### Remaining P3 work
+
+- `documents.sa-id` needs an OCR engine, because ID documents are images.
+- The P3 gate needs an owner-approved representative dataset with written accuracy, review-rate and latency targets for every product. All results so far are on synthetic PDFs.
+- Review corrections and export are next.
 
 ## Required update format for Claude
 

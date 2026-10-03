@@ -430,7 +430,7 @@ public sealed class ApiKeyAndExecutionTests(HeliosApiFactory factory)
     {
         var company = await TestCompany.OnboardAsync(_factory);
 
-        var response = await company.Owner.Client.PostAsync("/api/v1/products/documents.payslip/requests",
+        var response = await company.Owner.Client.PostAsync("/api/v1/products/documents.sa-id/requests",
             new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
